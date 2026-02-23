@@ -9,7 +9,6 @@
     <style>
         body { background-color: #f3f4f6; font-family: 'Segoe UI', sans-serif; }
 
-        /* Sidebar Styling Update */
         .sidebar {
             width: 260px;
             background: #1e293b;
@@ -17,9 +16,9 @@
             position: fixed;
             height: 100vh;
             padding-top: 20px;
-            display: flex;          /* Tambahan: Menggunakan Flexbox */
-            flex-direction: column; /* Tambahan: Susun vertikal */
-            justify-content: space-between; /* Tambahan: Jarak antar elemen */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             z-index: 1000;
             transition: all 0.3s;
         }
@@ -28,6 +27,17 @@
             padding: 0 20px 20px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 10px;
+        }
+
+        .sidebar-heading {
+            color: #ffffff;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0 20px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            letter-spacing: 0.05em;
         }
 
         .sidebar a {
@@ -49,7 +59,6 @@
 
         .sidebar a i { width: 25px; }
 
-        /* User Profile & Logout Section */
         .user-profile {
             padding: 20px;
             background: rgba(0,0,0,0.2);
@@ -61,7 +70,7 @@
 
         .btn-logout {
             background: rgba(255, 255, 255, 0.1);
-            color: #f87171; /* Warna merah soft */
+            color: #f87171;
             border: 1px solid rgba(248, 113, 113, 0.3);
             width: 100%;
             margin-top: 10px;
@@ -77,7 +86,6 @@
         .table-card { border-radius: 12px; border: none; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); overflow: hidden; }
         .table th { background-color: #f8fafc; font-weight: 600; color: #475569; }
 
-        /* Print Styles */
         @media print {
             .sidebar, .no-print, .btn, .pagination { display: none !important; }
             .main-content { margin-left: 0; padding: 0; }
@@ -90,30 +98,28 @@
 
     <!-- Sidebar -->
     <div class="sidebar no-print">
-
-        <!-- Bagian Atas: Logo & Menu -->
         <div>
             <div class="sidebar-header">
-                <h4 class="mb-0 fw-bold"><i class="fas fa-wallet text-primary me-2"></i> Bendahara</h4>
+                <h4 class="mb-0 fw-bold"><i class="fas fa-wallet text-primary me-2"></i>Bendahara</h4>
             </div>
 
+            <!-- LOGIKA ACTIVE MENU DIPERBARUI -->
             <a href="{{ route('home') }}" class="{{ request()->is('/') ? 'active' : '' }}">
                 <i class="fas fa-home me-2"></i> Dashboard
             </a>
 
-            <div class="text-uppercase text-muted small px-4 mt-4 mb-2 fw-bold opacity-50">Laporan & Cetak</div>
-            <a href="{{ route('laporan.sekolah') }}">
+            <div class="sidebar-heading">Laporan & Cetak</div>
+            <a href="{{ route('laporan.sekolah') }}" class="{{ request()->is('laporan/sekolah') ? 'active' : '' }}">
                 <i class="fas fa-school me-2"></i> Laporan Sekolah
             </a>
-            <a href="{{ route('laporan.wali') }}">
+            <a href="{{ route('laporan.wali') }}" class="{{ request()->is('laporan/wali') ? 'active' : '' }}">
                 <i class="fas fa-user-graduate me-2"></i> Laporan Wali Murid
             </a>
-            <a href="{{ route('laporan.yayasan') }}">
+            <a href="{{ route('laporan.yayasan') }}" class="{{ request()->is('laporan/yayasan') ? 'active' : '' }}">
                 <i class="fas fa-building me-2"></i> Laporan Yayasan
             </a>
         </div>
 
-        <!-- Bagian Bawah: User Profile & Logout -->
         <div class="user-profile">
             <div class="d-flex align-items-center mb-3 user-info">
                 <div class="bg-primary rounded-circle d-flex align-items-center justify-content-center me-2" style="width: 35px; height: 35px;">
@@ -121,7 +127,7 @@
                 </div>
                 <div style="line-height: 1.2;">
                     <small>Halo, Admin</small>
-                    <strong>{{ Auth::user()->name ?? 'User' }}</strong>
+                    <strong>{{ auth()->user()->name ?? 'User' }}</strong>
                 </div>
             </div>
 
@@ -137,6 +143,20 @@
 
     <!-- Main Content -->
     <div class="main-content">
+
+        <!-- ALERT VALIDASI (Untuk error form input) -->
+        @if ($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show no-print shadow-sm" role="alert">
+                <h6 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> Mohon Periksa Kembali:</h6>
+                <ul class="mb-0 ps-3">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        @endif
+
         @if(session('success'))
             <div class="alert alert-success alert-dismissible fade show no-print shadow-sm" role="alert">
                 <i class="fas fa-check-circle me-2"></i> {{ session('success') }}

@@ -4,21 +4,18 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BendaharaController;
 use App\Http\Controllers\ForgotPasswordController;
+use App\Http\Controllers\SiswaController;
+
 
 /*
 |--------------------------------------------------------------------------
-| ZONA PUBLIK (Tanpa Login)
-| Semua orang bisa akses halaman ini
+| ROUTE PUBLIK (Tanpa Login)
 |--------------------------------------------------------------------------
 */
-
-// 1. Login Standar
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-// 2. Fitur Lupa Password (DI LUAR middleware auth!)
-// Kita pindahkan ke sini agar bisa diklik oleh siapa saja
 Route::get('/forgot-password', [ForgotPasswordController::class, 'showForgotForm'])->name('password.request');
 Route::post('/forgot-password', [ForgotPasswordController::class, 'sendCode'])->name('password.send');
 
@@ -28,15 +25,8 @@ Route::post('/verify-code', [ForgotPasswordController::class, 'verifyCode'])->na
 Route::get('/reset-password', [ForgotPasswordController::class, 'showResetForm'])->name('password.reset.form');
 Route::post('/reset-password', [ForgotPasswordController::class, 'resetPassword'])->name('password.update');
 
-
-/*
-|--------------------------------------------------------------------------
-| ZONA PRIVAT (Wajib Login)
-| Hanya user yang sudah login yang bisa akses halaman ini
-|--------------------------------------------------------------------------
-*/
-
 Route::middleware(['auth'])->group(function () {
+
     Route::get('/', [BendaharaController::class, 'index'])->name('home');
 
     Route::post('/transaksi', [BendaharaController::class, 'store'])->name('transaksi.store');
@@ -46,4 +36,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/laporan/wali', [BendaharaController::class, 'laporanWali'])->name('laporan.wali');
     Route::get('/laporan/yayasan', [BendaharaController::class, 'laporanYayasan'])->name('laporan.yayasan');
     Route::get('/cetak/nota/{id}', [BendaharaController::class, 'cetakNota'])->name('cetak.nota');
+
+
+Route::get('/laporan/sekolah/export', [BendaharaController::class, 'exportSekolah'])->name('laporan.sekolah.export');
+Route::get('/laporan/wali/export', [BendaharaController::class, 'exportWali'])->name('laporan.wali.export');
 });

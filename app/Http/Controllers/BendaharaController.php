@@ -5,39 +5,91 @@ namespace App\Http\Controllers;
 use App\Models\Transaksi;
 use App\Models\DetailTransaksi;
 use Illuminate\Http\Request;
+use App\Exports\SekolahExport;
+use App\Exports\WaliExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class BendaharaController extends Controller
 {
     public function index()
     {
+        // 1. Statistik Utama
         $totalMasuk = Transaksi::where('jenis', 'Masuk')->sum('total_bayar');
         $totalKeluar = Transaksi::where('jenis', 'Keluar')->sum('total_bayar');
         $saldo = $totalMasuk - $totalKeluar;
 
+        // 2. Data Tabel Pagination
         $transaksis = Transaksi::latest()->paginate(10);
-        return view('dashboard', compact('transaksis', 'totalMasuk', 'totalKeluar', 'saldo'));
+
+        // 3. Data Grafik
+        $months = [];
+        $dataMasukChart = [];
+        $dataKeluarChart = [];
+
+        for ($i = 5; $i >= 0; $i--) {
+            $date = now()->subMonths($i);
+            $months[] = $date->translatedFormat('M y');
+
+            $dataMasukChart[] = Transaksi::where('jenis', 'Masuk')
+                ->whereMonth('tanggal', $date->month)
+                ->whereYear('tanggal', $date->year)
+                ->sum('total_bayar');
+
+            $dataKeluarChart[] = Transaksi::where('jenis', 'Keluar')
+                ->whereMonth('tanggal', $date->month)
+                ->whereYear('tanggal', $date->year)
+                ->sum('total_bayar');
+        }
+
+        // 4. Data Status Tambahan
+        $transaksiHariIni = Transaksi::whereDate('tanggal', today())->count();
+
+        // Total siswa yang sudah pernah transaksi (nama siswa unik)
+        $totalSiswa = Transaksi::whereNotNull('nama_siswa')
+            ->where('nama_siswa', '!=', '')
+            ->distinct('nama_siswa')
+            ->count('nama_siswa');
+
+        $pencapaianBulanIni = Transaksi::where('jenis', 'Masuk')
+            ->whereMonth('tanggal', now()->month)
+            ->whereYear('tanggal', now()->year)
+            ->sum('total_bayar');
+
+        // 5. Data Transaksi Terbaru
+        $recentTransactions = Transaksi::latest()->take(5)->get();
+
+        return view('dashboard', compact(
+            'transaksis',
+            'totalMasuk',
+            'totalKeluar',
+            'saldo',
+            'months',
+            'dataMasukChart',
+            'dataKeluarChart',
+            'transaksiHariIni',
+            'totalSiswa',
+            'pencapaianBulanIni',
+            'recentTransactions'
+        ));
     }
 
-    // Input Data dengan Multi-Item
+    // Input Data
     public function store(Request $request)
     {
-        // Validasi Header
         $request->validate([
             'jenis' => 'required|in:Masuk,Keluar',
             'kategori' => 'required',
             'tanggal' => 'required|date',
-            'nama_item' => 'required|array', // Wajib ada minimal 1 item
+            'nama_item' => 'required|array',
             'harga' => 'required|array',
             'jumlah' => 'required|array',
         ]);
 
-        // Hitung Total dari Input Frontend (atau hitung ulang di backend)
         $totalBayar = 0;
         foreach ($request->harga as $key => $harga) {
             $totalBayar += ($harga * $request->jumlah[$key]);
         }
 
-        // Simpan Transaksi Utama
         $transaksi = Transaksi::create([
             'jenis' => $request->jenis,
             'kategori' => $request->kategori,
@@ -48,9 +100,8 @@ class BendaharaController extends Controller
             'catatan' => $request->catatan,
         ]);
 
-        // Simpan Detail Item (Opsi Harga)
         foreach ($request->nama_item as $key => $nama) {
-            if(!empty($nama)) {
+            if (!empty($nama)) {
                 DetailTransaksi::create([
                     'transaksi_id' => $transaksi->id,
                     'nama_item' => $nama,
@@ -66,37 +117,66 @@ class BendaharaController extends Controller
 
     // --- LAPORAN ---
 
-    // 1. Laporan Sekolah (Semua Data)
-    public function laporanSekolah()
+    // 1. Laporan Sekolah
+    public function laporanSekolah(Request $request)
     {
-        $data = Transaksi::with('details')->orderBy('tanggal', 'desc')->get();
-        return view('laporan.sekolah', compact('data'));
+        $query = Transaksi::with('details')->orderBy('tanggal', 'desc');
+
+        if ($request->filled('jenis')) {
+            $query->where('jenis', $request->jenis);
+        }
+
+        if ($request->filled('kategori')) {
+            $query->where('kategori', 'like', '%' . $request->kategori . '%');
+        }
+
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $query->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        }
+
+        $data = $query->get();
+        return view('laporan.sekolah', compact('data', 'request'));
     }
 
-    // 2. Laporan Wali Murid (Filter Siswa)
+    // 2. Laporan Wali Murid
     public function laporanWali(Request $request)
     {
         $query = Transaksi::with('details')->where('jenis', 'Masuk');
 
-        if ($request->nama_siswa) {
+        if ($request->filled('nama_siswa')) {
             $query->where('nama_siswa', 'like', '%' . $request->nama_siswa . '%');
+        }
+
+        if ($request->filled('kelas')) {
+            $query->where('kelas', $request->kelas);
+        }
+
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $query->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
         }
 
         $data = $query->orderBy('tanggal', 'desc')->get();
         return view('laporan.wali', compact('data', 'request'));
     }
 
-    // 3. Laporan Yayasan (Laba Rugi)
-    public function laporanYayasan()
+    // 3. Laporan Yayasan
+    public function laporanYayasan(Request $request)
     {
-        $masuk = Transaksi::where('jenis', 'Masuk')->get();
-        $keluar = Transaksi::where('jenis', 'Keluar')->get();
+        $queryMasuk = Transaksi::where('jenis', 'Masuk');
+        $queryKeluar = Transaksi::where('jenis', 'Keluar');
 
-        // Kelompokkan per kategori untuk Yayasan
-        $reportMasuk = $masuk->groupBy('kategori')->map(function($item) {
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $queryMasuk->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+            $queryKeluar->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        }
+
+        $masuk = $queryMasuk->get();
+        $keluar = $queryKeluar->get();
+
+        $reportMasuk = $masuk->groupBy('kategori')->map(function ($item) {
             return $item->sum('total_bayar');
         });
-        $reportKeluar = $keluar->groupBy('kategori')->map(function($item) {
+        $reportKeluar = $keluar->groupBy('kategori')->map(function ($item) {
             return $item->sum('total_bayar');
         });
 
@@ -104,10 +184,10 @@ class BendaharaController extends Controller
         $totalKeluar = $keluar->sum('total_bayar');
         $saldo = $totalMasuk - $totalKeluar;
 
-        return view('laporan.yayasan', compact('reportMasuk', 'reportKeluar', 'totalMasuk', 'totalKeluar', 'saldo'));
+        return view('laporan.yayasan', compact('reportMasuk', 'reportKeluar', 'totalMasuk', 'totalKeluar', 'saldo', 'request'));
     }
 
-    // 4. Cetak Nota (Detail Item)
+    // 4. Cetak Nota
     public function cetakNota($id)
     {
         $transaksi = Transaksi::with('details')->findOrFail($id);
@@ -119,4 +199,5 @@ class BendaharaController extends Controller
         Transaksi::destroy($id);
         return back()->with('success', 'Data dihapus.');
     }
+
 }
