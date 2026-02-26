@@ -4,24 +4,23 @@ namespace App\Http\Controllers;
 
 use App\Models\Transaksi;
 use App\Models\DetailTransaksi;
+use App\Models\Siswa;
 use Illuminate\Http\Request;
 use App\Exports\SekolahExport;
 use App\Exports\WaliExport;
+use App\Exports\YayasanExport; // Export Yayasan ditambahkan
 use Maatwebsite\Excel\Facades\Excel;
 
 class BendaharaController extends Controller
 {
     public function index()
     {
-        // 1. Statistik Utama
         $totalMasuk = Transaksi::where('jenis', 'Masuk')->sum('total_bayar');
         $totalKeluar = Transaksi::where('jenis', 'Keluar')->sum('total_bayar');
         $saldo = $totalMasuk - $totalKeluar;
 
-        // 2. Data Tabel Pagination
         $transaksis = Transaksi::latest()->paginate(10);
 
-        // 3. Data Grafik
         $months = [];
         $dataMasukChart = [];
         $dataKeluarChart = [];
@@ -41,21 +40,14 @@ class BendaharaController extends Controller
                 ->sum('total_bayar');
         }
 
-        // 4. Data Status Tambahan
         $transaksiHariIni = Transaksi::whereDate('tanggal', today())->count();
-
-        // Total siswa yang sudah pernah transaksi (nama siswa unik)
-        $totalSiswa = Transaksi::whereNotNull('nama_siswa')
-            ->where('nama_siswa', '!=', '')
-            ->distinct('nama_siswa')
-            ->count('nama_siswa');
+        $totalSiswa = Siswa::where('status', 'aktif')->count();
 
         $pencapaianBulanIni = Transaksi::where('jenis', 'Masuk')
             ->whereMonth('tanggal', now()->month)
             ->whereYear('tanggal', now()->year)
             ->sum('total_bayar');
 
-        // 5. Data Transaksi Terbaru
         $recentTransactions = Transaksi::latest()->take(5)->get();
 
         return view('dashboard', compact(
@@ -138,6 +130,31 @@ class BendaharaController extends Controller
         return view('laporan.sekolah', compact('data', 'request'));
     }
 
+    // Export Excel Sekolah
+    public function exportSekolah(Request $request)
+    {
+        // 1. Ambil query yang sama dengan laporanSekolah agar data sinkron
+        $query = Transaksi::query()->orderBy('tanggal', 'desc');
+
+        if ($request->filled('jenis')) {
+            $query->where('jenis', $request->jenis);
+        }
+
+        if ($request->filled('kategori')) {
+            $query->where('kategori', 'like', '%' . $request->kategori . '%');
+        }
+
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $query->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        }
+
+        $data = $query->get();
+
+        // 2. Download Excel
+        $fileName = 'Laporan_Keuangan_Sekolah_' . now()->format('Y-m-d_His') . '.xlsx';
+        return Excel::download(new SekolahExport($data), $fileName);
+    }
+
     // 2. Laporan Wali Murid
     public function laporanWali(Request $request)
     {
@@ -159,7 +176,7 @@ class BendaharaController extends Controller
         return view('laporan.wali', compact('data', 'request'));
     }
 
-    // 3. Laporan Yayasan
+    // 3. Laporan Yayasan (View)
     public function laporanYayasan(Request $request)
     {
         $queryMasuk = Transaksi::where('jenis', 'Masuk');
@@ -187,6 +204,37 @@ class BendaharaController extends Controller
         return view('laporan.yayasan', compact('reportMasuk', 'reportKeluar', 'totalMasuk', 'totalKeluar', 'saldo', 'request'));
     }
 
+    // Export Excel Yayasan
+    public function exportYayasan(Request $request)
+    {
+        // 1. Lakukan logika perhitungan yang sama dengan laporanYayasan
+        $queryMasuk = Transaksi::where('jenis', 'Masuk');
+        $queryKeluar = Transaksi::where('jenis', 'Keluar');
+
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $queryMasuk->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+            $queryKeluar->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        }
+
+        $masuk = $queryMasuk->get();
+        $keluar = $queryKeluar->get();
+
+        $reportMasuk = $masuk->groupBy('kategori')->map(function ($item) {
+            return $item->sum('total_bayar');
+        });
+        $reportKeluar = $keluar->groupBy('kategori')->map(function ($item) {
+            return $item->sum('total_bayar');
+        });
+
+        $totalMasuk = $masuk->sum('total_bayar');
+        $totalKeluar = $keluar->sum('total_bayar');
+        $saldo = $totalMasuk - $totalKeluar;
+
+        // 2. Download Excel menggunakan YayasanExport
+        $fileName = 'Laporan_Yayasan_' . now()->format('Y-m-d_His') . '.xlsx';
+        return Excel::download(new YayasanExport($reportMasuk, $reportKeluar, $totalMasuk, $totalKeluar, $saldo), $fileName);
+    }
+
     // 4. Cetak Nota
     public function cetakNota($id)
     {
@@ -196,8 +244,23 @@ class BendaharaController extends Controller
 
     public function destroy($id)
     {
-        Transaksi::destroy($id);
-        return back()->with('success', 'Data dihapus.');
+        Transaksi::findOrFail($id)->delete();
+
+        return back()->with('success', 'Data dipindahkan ke menu Riwayat dan dapat dipulihkan.');
     }
 
+    public function riwayat()
+    {
+        $transaksis = Transaksi::onlyTrashed()->latest('deleted_at')->paginate(10);
+
+        return view('keuangan.riwayat', compact('transaksis'));
+    }
+
+    public function restore($id)
+    {
+        $transaksi = Transaksi::onlyTrashed()->findOrFail($id);
+        $transaksi->restore();
+
+        return back()->with('success', 'Data transaksi berhasil dipulihkan.');
+    }
 }

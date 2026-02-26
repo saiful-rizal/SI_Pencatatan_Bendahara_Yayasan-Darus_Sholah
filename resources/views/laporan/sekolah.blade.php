@@ -40,9 +40,16 @@
         <small class="text-muted">Cari dan filter data, lalu klik baris untuk melihat detail.</small>
     </div>
     @if($data->count() > 0)
-        <button onclick="window.print()" class="btn btn-primary rounded-pill px-4 shadow-sm">
-            <i class="fas fa-print me-2"></i> Cetak Tampilan
-        </button>
+        <div class="d-flex gap-2">
+            <!-- PERBAIKAN DI SINI: request() ditambahkan kurung () -->
+            <a href="{{ route('laporan.sekolah.export', request()->query()) }}" class="btn btn-success rounded-pill px-4 shadow-sm text-white text-decoration-none">
+                <i class="fas fa-file-excel me-2"></i> Export Excel
+            </a>
+
+            <button onclick="window.print()" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                <i class="fas fa-print me-2"></i> Cetak Tampilan
+            </button>
+        </div>
     @endif
 </div>
 
@@ -139,6 +146,7 @@
     </div>
 @endif
 
+<!-- Modal Detail -->
 <div class="modal fade" id="detailModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
@@ -169,12 +177,6 @@
                             <span class="fw-bold text-dark" id="modalClass">-</span>
                         </div>
                     </div>
-                    @if(false)
-                    <div class="mt-2">
-                        <small class="text-muted d-block">Catatan</small>
-                        <span class="small" id="modalNote">-</span>
-                    </div>
-                    @endif
                 </div>
 
                 <h6 class="small fw-bold text-muted text-uppercase mb-2">Rincian Item</h6>
