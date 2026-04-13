@@ -59,3 +59,67 @@ Lalu jalankan:
 - Kategori siswa: `mondok` / `non_mondok`.
 - Item pembayaran memiliki `berlaku_untuk`: `mondok` / `non_mondok` / `semua`.
 - Status tagihan: `belum_lunas` / `sebagian` / `lunas`.
+
+## Deploy ke Heroku
+
+Project ini sudah disiapkan untuk Heroku dengan:
+
+- `Procfile`:
+  - `web: heroku-php-apache2 public/`
+  - `release: php artisan migrate --force`
+- `app.json` (addon PostgreSQL + buildpack Node.js dan PHP)
+
+### Langkah Deploy (CLI)
+
+1. Login dan buat app Heroku:
+
+    ```bash
+    heroku login
+    heroku create nama-app-anda
+    ```
+
+2. Pastikan buildpack urutannya Node.js lalu PHP:
+
+    ```bash
+    heroku buildpacks:clear -a nama-app-anda
+    heroku buildpacks:add heroku/nodejs -a nama-app-anda
+    heroku buildpacks:add heroku/php -a nama-app-anda
+    ```
+
+3. Tambahkan database PostgreSQL:
+
+    ```bash
+    heroku addons:create heroku-postgresql:essential-0 -a nama-app-anda
+    ```
+
+4. Set environment variable penting:
+
+    ```bash
+    heroku config:set APP_ENV=production APP_DEBUG=false DB_CONNECTION=pgsql -a nama-app-anda
+    heroku config:set APP_KEY="$(php artisan key:generate --show)" -a nama-app-anda
+    heroku config:set APP_URL=https://nama-app-anda.herokuapp.com -a nama-app-anda
+    ```
+
+5. Deploy ke Heroku:
+
+    ```bash
+    git push heroku main
+    ```
+
+6. Jalankan seeder bila diperlukan:
+
+    ```bash
+    heroku run php artisan db:seed -a nama-app-anda
+    ```
+
+7. Buka aplikasi:
+
+    ```bash
+    heroku open -a nama-app-anda
+    ```
+
+### Catatan Heroku
+
+- File system Heroku bersifat ephemeral (tidak persisten).
+- Simpan file upload/backup di object storage (misalnya S3) jika ingin permanen.
+- Jika domain berubah, update `APP_URL` via `heroku config:set`.

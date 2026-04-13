@@ -1,0 +1,51 @@
+{
+  "name": "bendahara-app",
+  "description": "Aplikasi Bendahara Sekolah berbasis Laravel 10",
+  "repository": "",
+  "keywords": ["laravel", "php", "school", "finance"],
+  "env": {
+    "APP_ENV": {
+      "description": "Laravel environment",
+      "value": "production"
+    },
+    "APP_DEBUG": {
+      "description": "Set false in production",
+      "value": "false"
+    },
+    "APP_KEY": {
+      "description": "Generate with: php artisan key:generate --show"
+    },
+    "APP_URL": {
+      "description": "Public app URL, contoh: https://nama-app.herokuapp.com"
+    },
+    "DB_CONNECTION": {
+      "description": "Database driver",
+      "value": "pgsql"
+    },
+    "LOG_CHANNEL": {
+      "description": "Logging channel",
+      "value": "stack"
+    },
+    "LOG_LEVEL": {
+      "description": "Logging level",
+      "value": "info"
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "addons": [
+    "heroku-postgresql:essential-0"
+  ],
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    },
+    {
+      "url": "heroku/php"
+    }
+  ]
+}
