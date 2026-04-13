@@ -4,17 +4,30 @@
     <meta charset="UTF-8">
     <title>Bukti Pembayaran</title>
     <style>
+        @page {
+            size: 58mm auto;
+            margin: 2mm;
+        }
+
+        html, body {
+            width: 58mm;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
             background: #f2f2f2;
-            padding: 30px;
+            padding: 0;
             font-family: "Courier New", monospace;
+            font-size: 11px;
         }
 
         .nota {
             background: #fff;
-            width: 700px; /* PERSEGI PANJANG */
+            width: 100%;
+            box-sizing: border-box;
             margin: auto;
-            padding: 30px;
+            padding: 2mm;
             border: 1px solid #000;
         }
 
@@ -40,7 +53,7 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 14px;
+            font-size: 11px;
         }
 
         th, td {
@@ -57,14 +70,26 @@
         }
 
         .total-section {
-            margin-top: 20px;
-            width: 300px;
+            margin-top: 8px;
+            width: 100%;
             float: right;
         }
 
         .footer {
-            margin-top: 60px;
+            margin-top: 20px;
             text-align: right;
+        }
+
+        @media print {
+            body {
+                background: #fff;
+            }
+
+            .nota {
+                border: none;
+                margin: 0;
+                padding: 0;
+            }
         }
 
     </style>
@@ -76,9 +101,17 @@
 
     <!-- HEADER -->
     <div class="header">
-        <img src="{{ asset('image/logo_pondok.jpeg') }}" class="logo">
-        <h2 style="margin:0;">YAYASAN DARUS SHOLAH</h2>
-        <p style="margin:0;">Alamat Sekolah</p>
+        <table style="width:100%; border-collapse:collapse;">
+            <tr>
+                <td style="width:90px; vertical-align:top; text-align:left;">
+                    <img src="{{ asset('image/logo_pondok.jpeg') }}" class="logo" style="margin:0;">
+                </td>
+                <td style="text-align:center;">
+                    <h2 style="margin:0;">SMA UNGGULAN BPPT DARUS SHOLAH</h2>
+                    <p style="margin:0;">Alamat Sekolah</p>
+                </td>
+            </tr>
+        </table>
     </div>
 
     <div class="line"></div>

@@ -2,170 +2,378 @@
 
 @section('content')
 <style>
-    /* Modern Table & Card */
-    .modern-card {
-        border: none;
-        border-radius: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        background: white;
-    }
-    .table-custom th {
-        font-weight: 600;
-        text-transform: uppercase;
-        font-size: 0.75rem;
-        color: #64748b;
-        border-bottom: 2px solid #f1f5f9;
-    }
-    .table-custom td {
-        vertical-align: middle;
-        border-bottom: 1px solid #f8fafc;
-        font-size: 0.9rem;
+    .report-head {
+        background: #fff;
+        border: 1px solid #e1e9f5;
+        border-radius: 12px;
+        padding: 16px;
     }
 
-    /* Print Styling */
+    .report-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1e3655;
+        margin-bottom: 2px;
+    }
+
+    .report-meta {
+        font-size: 12px;
+        color: #6b7f9d;
+    }
+
+    .wali-table th {
+        font-size: 12px;
+        color: #6f83a3;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        white-space: nowrap;
+    }
+
+    .wali-table td {
+        font-size: 13px;
+        vertical-align: middle;
+        color: #334a68;
+    }
+
+    .wali-doc-meta {
+        font-size: 14px;
+        color: #2f4564;
+        line-height: 1.7;
+        margin-bottom: 14px;
+    }
+
+    .wali-doc-meta strong {
+        display: inline-block;
+        min-width: 170px;
+        color: #1f3657;
+    }
+
+    .report-sign {
+        margin-top: 32px;
+        width: 280px;
+        margin-left: auto;
+        text-align: center;
+        color: #445d7d;
+        font-size: 13px;
+    }
+
+    .report-sign .sign-line {
+        margin-top: 56px;
+        border-top: 1px solid #9fb0c8;
+        padding-top: 6px;
+    }
+
+    .print-only {
+        display: none;
+    }
+
     @media print {
-        .no-print { display: none !important; }
-        .modern-card { box-shadow: none; border: 1px solid #ddd; }
+        @page {
+            size: A4 landscape;
+            margin: 10mm;
+        }
+
+        .no-print {
+            display: none !important;
+        }
+
+        .print-only {
+            display: block !important;
+        }
+
+        .report-head {
+            border: none;
+            border-bottom: 2px solid #1f3657;
+            border-radius: 0;
+            padding: 0 0 10px 0;
+            margin-bottom: 14px;
+        }
+
+        .table-responsive {
+            overflow: visible !important;
+        }
+
+        .wali-table {
+            width: 100% !important;
+            table-layout: fixed;
+        }
+
+        .wali-table th,
+        .wali-table td {
+            white-space: normal !important;
+            word-break: break-word;
+            font-size: 11px;
+            padding: 4px 6px;
+        }
+
+        .official-meta td {
+            font-size: 12px;
+            padding: 2px 4px;
+            vertical-align: top;
+        }
     }
 </style>
 
-<!-- HEADER & TITLE -->
 <div class="d-flex justify-content-between align-items-center mb-3 no-print">
     <div>
-        <h4 class="fw-bold text-dark mb-1">Laporan Pembayaran Siswa</h4>
-        <small class="text-muted">Cari riwayat pembayaran berdasarkan nama, kelas, atau periode tanggal.</small>
+        <h4 class="fw-bold text-dark mb-1">Laporan Pembayaran Wali Murid</h4>
+                <small class="text-muted">Data diambil dari transaksi pembayaran tagihan siswa dan dipisah per kelas tagihan (10, 11, 12).</small>
     </div>
-    @if($data->count() > 0)
-        <button onclick="window.print()" class="btn btn-primary shadow-sm rounded-pill px-4">
-            <i class="fas fa-print me-2"></i> Cetak Laporan
-        </button>
-    @endif
+    <div class="d-flex gap-2">
+        <a href="{{ route('laporan.wali.export', request()->query()) }}" class="btn btn-success">
+            <i class="fas fa-file-excel me-2"></i>Export Excel
+        </a>
+        @if($data->count() > 0)
+            <button onclick="printLaporanWali()" class="btn btn-primary">
+                <i class="fas fa-file-pdf me-2"></i>Cetak PDF
+            </button>
+        @endif
+    </div>
 </div>
 
-<!-- FORM FILTER (Card Abu-abu Terang) -->
-<div class="card bg-light border-0 rounded-4 p-4 mb-4 no-print">
-    <form method="GET" action="{{ route('laporan.wali') }}" class="row g-3">
+<div class="report-head mb-3 print-only">
+    <table style="width:100%;border-collapse:collapse;">
+        <tr>
+            <td style="width:90px;vertical-align:top;text-align:left;">
+                <img src="{{ asset('image/logo_pondok.jpeg') }}" alt="Logo" style="width:70px;height:auto;">
+            </td>
+            <td style="text-align:center;">
+                <div class="report-title">SMA UNGGULAN BPPT DARUS SHOLAH</div>
+                <div class="report-meta">SMA UNGGULAN BPPT DARUS SHOLAH | Laporan Pembayaran Wali Murid</div>
+                <div class="report-meta">Dicetak: {{ now()->format('d-m-Y H:i') }}</div>
+            </td>
+        </tr>
+    </table>
+</div>
 
-        <!-- Filter Nama -->
+<div class="card border-0 shadow-sm p-3 mb-4 no-print">
+    <form method="GET" action="{{ route('laporan.wali') }}" class="row g-3">
         <div class="col-md-4">
-            <label class="form-label small fw-bold text-muted">Cari Nama Siswa</label>
+            <label class="form-label">Nama Siswa</label>
             <input type="text" name="nama_siswa" class="form-control" placeholder="Contoh: Ahmad" value="{{ $request->nama_siswa }}">
         </div>
-
-        <!-- Filter Kelas -->
         <div class="col-md-2">
-            <label class="form-label small fw-bold text-muted">Kelas</label>
-            <input type="text" name="kelas" class="form-control" placeholder="Mis: X-A" value="{{ $request->kelas }}">
+            <label class="form-label">Kelas</label>
+            <select name="kelas" class="form-select">
+                <option value="">Semua</option>
+                <option value="10" {{ (string) $request->kelas === '10' ? 'selected' : '' }}>10</option>
+                <option value="11" {{ (string) $request->kelas === '11' ? 'selected' : '' }}>11</option>
+                <option value="12" {{ (string) $request->kelas === '12' ? 'selected' : '' }}>12</option>
+            </select>
         </div>
-
-        <!-- Filter Tanggal Mulai -->
         <div class="col-md-2">
-            <label class="form-label small fw-bold text-muted">Dari Tanggal</label>
+            <label class="form-label">Dari Tanggal</label>
             <input type="date" name="tanggal_mulai" class="form-control" value="{{ $request->tanggal_mulai }}">
         </div>
-
-        <!-- Filter Tanggal Akhir -->
         <div class="col-md-2">
-            <label class="form-label small fw-bold text-muted">Sampai Tanggal</label>
+            <label class="form-label">Sampai Tanggal</label>
             <input type="date" name="tanggal_selesai" class="form-control" value="{{ $request->tanggal_selesai }}">
         </div>
-
-        <!-- Tombol Aksi -->
+        <div class="col-md-2">
+            <label class="form-label">Per Halaman</label>
+            <select name="per_page" class="form-select">
+                @foreach([10, 25, 50, 100] as $size)
+                    <option value="{{ $size }}" {{ (int) ($request->per_page ?? 25) === $size ? 'selected' : '' }}>{{ $size }}</option>
+                @endforeach
+            </select>
+        </div>
         <div class="col-md-2 d-flex align-items-end gap-2">
-            <button type="submit" class="btn btn-primary w-100 fw-bold">
-                <i class="fas fa-search"></i> Cari
-            </button>
-            <a href="{{ route('laporan.wali') }}" class="btn btn-outline-secondary w-100" title="Reset Filter">
-                <i class="fas fa-sync"></i>
-            </a>
+            <button type="submit" name="cari" value="1" class="btn btn-primary w-100">Cari</button>
+            <a href="{{ route('laporan.wali') }}" class="btn btn-outline-secondary w-100">Reset</a>
         </div>
     </form>
 </div>
 
-<!-- HASIL PENCARIAN -->
-@if($request->hasAny(['nama_siswa', 'kelas', 'tanggal_mulai']) && $data->count() > 0)
+@php
+    $isSearchRequested = $request->has('cari') || $request->hasAny(['nama_siswa', 'kelas', 'tanggal_mulai', 'tanggal_selesai']);
+@endphp
 
-    <div class="modern-card overflow-hidden">
-        <div class="card-body p-4">
+@if($isSearchRequested && $data->count() > 0)
+    @php
+        $totalPembayaranNominal = isset($totalPembayaran) ? (float) $totalPembayaran : (float) $data->sum('nominal_bayar');
+        $totalKelas10 = 0;
+        $totalKelas11 = 0;
+        $totalKelas12 = 0;
+        $totalDokumen = method_exists($data, 'total') ? $data->total() : $data->count();
+        $periodeLabel = ($request->tanggal_mulai && $request->tanggal_selesai)
+            ? date('d-m-Y', strtotime($request->tanggal_mulai)) . ' s/d ' . date('d-m-Y', strtotime($request->tanggal_selesai))
+            : 'Semua Periode';
+        $kelasLabel = $request->kelas ? 'Kelas ' . $request->kelas : 'Semua Kelas';
+        $dokumenLabel = 'LW-' . now()->format('Ymd') . '-' . str_pad((string) $totalDokumen, 3, '0', STR_PAD_LEFT);
+    @endphp
 
-            <!-- Info Header Siswa -->
-            <div class="text-center mb-4 border-bottom pb-3">
-                <img src="{{ asset('image/logo_pondok.jpeg') }}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; margin-bottom: 10px;" alt="Logo">
-                <h3 class="fw-bold text-primary">{{ $data->first()->nama_siswa }}</h3>
-                <span class="badge bg-info text-white px-3 py-1 rounded-pill">{{ $data->first()->kelas }}</span>
-                <p class="text-muted small mt-1 mb-0">
-                    @if($request->tanggal_mulai && $request->tanggal_selesai)
-                        Periode: {{ $request->tanggal_mulai }} s/d {{ $request->tanggal_selesai }}
-                    @else
-                        Semua Riwayat Pembayaran
-                    @endif
-                </p>
+    <div class="wali-doc-meta print-only">
+        <table class="official-meta" style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+            <tr><td style="width:90px;">Nomor</td><td style="width:12px;">:</td><td>DS/WALI/{{ now()->format('Y/m') }}/{{ str_pad((string) $totalDokumen, 3, '0', STR_PAD_LEFT) }}</td><td style="text-align:right;">{{ now()->translatedFormat('d F Y') }}</td></tr>
+            <tr><td>Sifat</td><td>:</td><td colspan="2">Penting</td></tr>
+            <tr><td>Lampiran</td><td>:</td><td colspan="2">1 berkas</td></tr>
+            <tr><td>Hal</td><td>:</td><td colspan="2">Laporan Pembayaran Wali Murid</td></tr>
+        </table>
+        <div style="margin-bottom:8px;">Yth. Ketua SMA UNGGULAN BPPT DARUS SHOLAH<br>di Tempat</div>
+        <div style="text-align:justify;margin-bottom:8px;">Dengan hormat, berikut kami sampaikan laporan pembayaran wali murid untuk {{ $periodeLabel }} pada {{ $kelasLabel }} sebagai bahan evaluasi realisasi pembayaran.</div>
+        <div><strong>Nama Instansi</strong>: SMA UNGGULAN BPPT DARUS SHOLAH</div>
+        <div><strong>Jenis Dokumen</strong>: Laporan Pembayaran Wali Murid</div>
+        <div><strong>Nomor Dokumen</strong>: {{ $dokumenLabel }}</div>
+        <div><strong>Periode Data</strong>: {{ $periodeLabel }}</div>
+        <div><strong>Ruang Kelas</strong>: {{ $kelasLabel }}</div>
+    </div>
+
+    @php
+        $kelasRows = [
+            '10' => collect(),
+            '11' => collect(),
+            '12' => collect(),
+        ];
+
+        foreach ($data as $pembayaran) {
+            $tagihan = $pembayaran->tagihan;
+            $kelasTagihanRaw = trim((string) ($tagihan?->kelas ?? ''));
+            $kelasTagihanNorm = preg_replace('/\s+/', ' ', $kelasTagihanRaw) ?: '';
+            $kelasAngka = null;
+
+            if (preg_match('/^(XII|XI|X|12|11|10)\b/i', $kelasTagihanNorm, $kelasMatch)) {
+                $prefix = strtoupper($kelasMatch[1]);
+                $kelasAngka = match ($prefix) {
+                    'X' => '10',
+                    'XI' => '11',
+                    'XII' => '12',
+                    default => $prefix,
+                };
+            }
+
+            if (isset($kelasRows[$kelasAngka])) {
+                $kelasRows[$kelasAngka]->push($pembayaran);
+            }
+        }
+
+        $totalKelas10 = (float) $kelasRows['10']->sum('nominal_bayar');
+        $totalKelas11 = (float) $kelasRows['11']->sum('nominal_bayar');
+        $totalKelas12 = (float) $kelasRows['12']->sum('nominal_bayar');
+    @endphp
+
+    @php
+        $kelasDipilih = null;
+        if ($request->kelas !== null && $request->kelas !== '') {
+            $kelasRaw = strtoupper(trim((string) $request->kelas));
+            $kelasDipilih = match ($kelasRaw) {
+                'X' => '10',
+                'XI' => '11',
+                'XII' => '12',
+                default => in_array($kelasRaw, ['10', '11', '12'], true) ? $kelasRaw : null,
+            };
+        }
+
+        $kelasTablesToShow = $kelasDipilih !== null ? [$kelasDipilih] : ['10', '11', '12'];
+    @endphp
+
+    @foreach($kelasTablesToShow as $kelasTable)
+        @php
+            $rowsTable = $kelasRows[$kelasTable];
+            $totalTable = (float) $rowsTable->sum('nominal_bayar');
+        @endphp
+        <div class="card border-0 shadow-sm overflow-hidden mb-3">
+            <div class="card-header bg-light fw-bold text-dark">
+                List Pembayaran Kelas Tagihan {{ $kelasTable }}
             </div>
-
-            <!-- Tabel Transaksi -->
             <div class="table-responsive">
-                <table class="table table-custom mb-0">
+                <table class="table wali-table mb-0 align-middle">
                     <thead>
                         <tr>
-                            <th width="15%">Tanggal</th>
-                            <th width="20%">Kategori</th>
-                            <th width="45%">Item Pembayaran</th>
-                            <th class="text-end" width="20%">Jumlah Bayar</th>
+                            <th>Tanggal</th>
+                            <th>NIS</th>
+                            <th>Nama Siswa</th>
+                            <th>Kelas Tagihan</th>
+                            <th>Item Tagihan</th>
+                            <th>Periode</th>
+                            <th>Metode</th>
+                            <th class="text-end">Nominal Bayar</th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($data as $d)
-                        <tr>
-                            <td>
-                                <div class="fw-bold text-dark">{{ $d->tanggal->format('d M') }}</div>
-                                <div class="text-muted" style="font-size: 0.75rem;">{{ $d->tanggal->format('Y') }}</div>
-                            </td>
-                            <td>{{ $d->kategori }}</td>
-                            <td>
-                                @foreach($d->details as $det)
-                                    <div class="mb-1">
-                                        <i class="fas fa-check-circle text-success small me-1"></i>
-                                        {{ $det->nama_item }}
-                                        <span class="text-muted small">({{ $det->jumlah }} x {{ number_format($det->harga, 0, ',', '.') }})</span>
-                                    </div>
-                                @endforeach
-                            </td>
-                            <td class="text-end fw-bold">
-                                Rp {{ number_format($d->total_bayar, 0, ',', '.') }}
-                            </td>
-                        </tr>
-                        @endforeach
+                        @forelse($rowsTable as $pembayaran)
+                            @php
+                                $tagihan = $pembayaran->tagihan;
+                                $siswa = $tagihan?->siswa;
+                                $item = $tagihan?->itemPembayaran;
+                                $kelasTagihanRaw = trim((string) ($tagihan?->kelas ?? ''));
+                                $kelasTagihanNorm = preg_replace('/\s+/', ' ', $kelasTagihanRaw) ?: '-';
+                            @endphp
+                            <tr>
+                                <td>{{ optional($pembayaran->tanggal_bayar)->format('d-m-Y') }}</td>
+                                <td>{{ $siswa?->nis ?? '-' }}</td>
+                                <td>{{ $siswa?->nama ?? '-' }}</td>
+                                <td>{{ $kelasTagihanNorm }}</td>
+                                <td>{{ $item?->nama_item ?? '-' }}</td>
+                                <td>{{ $tagihan?->periode_label ?? '-' }}</td>
+                                <td>{{ strtoupper((string) ($pembayaran->metode_bayar ?? '-')) }}</td>
+                                <td class="text-end fw-bold">Rp. {{ number_format((float) $pembayaran->nominal_bayar, 0, ',', '.') }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">Tidak ada pembayaran untuk kelas tagihan {{ $kelasTable }}.</td>
+                            </tr>
+                        @endforelse
                     </tbody>
                     <tfoot>
-                        <tr class="bg-light fw-bold">
-                            <td colspan="3" class="text-end text-primary fs-5 border-top-2">TOTAL KESELURUHAN:</td>
-                            <td class="text-end text-primary fs-4 border-top-2">Rp {{ number_format($data->sum('total_bayar'), 0, ',', '.') }}</td>
+                        <tr>
+                            <td colspan="7" class="text-end fw-bold">TOTAL KELAS {{ $kelasTable }}</td>
+                            <td class="text-end fw-bold text-primary">Rp. {{ number_format($totalTable, 0, ',', '.') }}</td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
         </div>
-    </div>
+    @endforeach
 
-@elseif($request->hasAny(['nama_siswa', 'kelas', 'tanggal_mulai']))
-    <!-- State: Data Tidak Ditemukan -->
-    <div class="alert alert-warning border-0 rounded-4 shadow-sm d-flex align-items-center" role="alert">
-        <i class="fas fa-exclamation-circle fa-2x text-warning me-3"></i>
-        <div>
-            <h5 class="alert-heading fw-bold mb-1">Data Tidak Ditemukan</h5>
-            <p class="mb-0 small text-muted">
-                Tidak ada riwayat transaksi untuk siswa <strong>"{{ $request->nama_siswa ?? '...' }}"</strong>
-                Kelas <strong>"{{ $request->kelas ?? '...' }}"</strong>
-                pada periode tanggal tersebut.
-            </p>
+    <div class="card border-0 shadow-sm overflow-hidden mb-3">
+        <div class="table-responsive">
+            <table class="table wali-table mb-0 align-middle">
+                <tfoot>
+                    <tr>
+                        <td class="text-end fw-bold">TOTAL KELAS 10</td>
+                        <td class="text-end fw-bold text-primary">Rp. {{ number_format($totalKelas10, 0, ',', '.') }}</td>
+                        <td class="text-end fw-bold">TOTAL KELAS 11</td>
+                        <td class="text-end fw-bold text-primary">Rp. {{ number_format($totalKelas11, 0, ',', '.') }}</td>
+                        <td class="text-end fw-bold">TOTAL KELAS 12</td>
+                        <td class="text-end fw-bold text-primary">Rp. {{ number_format($totalKelas12, 0, ',', '.') }}</td>
+                        <td class="text-end fw-bold">GRAND TOTAL</td>
+                        <td class="text-end fw-bold text-success">Rp. {{ number_format($totalPembayaranNominal, 0, ',', '.') }}</td>
+                    </tr>
+                </tfoot>
+            </table>
         </div>
     </div>
+
+    @if(method_exists($data, 'links'))
+        <div class="mt-3 no-print">
+            {{ $data->links() }}
+        </div>
+    @endif
+
+    <div class="report-sign print-only">
+        <div>{{ now()->translatedFormat('d F Y') }}</div>
+        <div>Mengetahui,</div>
+        <div class="sign-line">Bendahara</div>
+    </div>
+@elseif($isSearchRequested)
+    <div class="alert alert-warning">
+        Data pembayaran tidak ditemukan pada filter yang dipilih.
+    </div>
 @else
-    <!-- State: Awal (Belum Cari) -->
     <div class="text-center py-5 text-muted">
-        <i class="fas fa-filter fa-3x mb-3 opacity-25"></i>
-        <p>Masukkan kriteria filter di atas untuk melihat laporan.</p>
+        Masukkan filter untuk menampilkan laporan pembayaran wali murid.
     </div>
 @endif
 
+<script>
+    function printLaporanWali() {
+        const originalTitle = document.title;
+        const tanggal = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        document.title = 'Wali_Murid_Export_PDF_' + tanggal;
+        window.print();
+        setTimeout(() => {
+            document.title = originalTitle;
+        }, 400);
+    }
+</script>
 @endsection

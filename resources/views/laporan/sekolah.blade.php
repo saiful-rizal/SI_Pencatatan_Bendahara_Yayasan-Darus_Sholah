@@ -2,6 +2,29 @@
 
 @section('content')
 <style>
+    .report-head {
+        background: #fff;
+        border: 1px solid #e1e9f5;
+        border-radius: 12px;
+        padding: 16px;
+    }
+
+    .report-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #1e3655;
+        margin-bottom: 2px;
+    }
+
+    .report-meta {
+        font-size: 12px;
+        color: #6b7f9d;
+    }
+
+    .print-only {
+        display: none;
+    }
+
     .modern-card {
         border: none;
         border-radius: 1rem;
@@ -29,8 +52,23 @@
     }
     @media print {
         .no-print { display: none !important; }
+        .print-only { display: block !important; }
         .modern-card { box-shadow: none; border: 1px solid #ddd; }
         .clickable-row:hover { background-color: transparent; }
+
+        .report-head {
+            border: none;
+            border-bottom: 2px solid #1f3657;
+            border-radius: 0;
+            padding: 0 0 10px 0;
+            margin-bottom: 14px;
+        }
+
+        .official-meta td {
+            font-size: 12px;
+            padding: 2px 4px;
+            vertical-align: top;
+        }
     }
 </style>
 
@@ -46,11 +84,41 @@
                 <i class="fas fa-file-excel me-2"></i> Export Excel
             </a>
 
-            <button onclick="window.print()" class="btn btn-primary rounded-pill px-4 shadow-sm">
+            <button onclick="printLaporanSekolah()" class="btn btn-primary rounded-pill px-4 shadow-sm">
                 <i class="fas fa-print me-2"></i> Cetak Tampilan
             </button>
         </div>
     @endif
+</div>
+
+@php
+    $nomorSuratSekolah = 'DS/SKL/' . now()->format('Y/m') . '/' . str_pad((string) $data->count(), 3, '0', STR_PAD_LEFT);
+@endphp
+
+<div class="report-head mb-3 print-only">
+    <table style="width:100%;border-collapse:collapse;">
+        <tr>
+            <td style="width:90px;vertical-align:top;text-align:left;">
+                <img src="{{ asset('image/logo_pondok.jpeg') }}" alt="Logo" style="width:70px;height:auto;">
+            </td>
+            <td style="text-align:center;">
+                <div class="report-title">SMA UNGGULAN BPPT DARUS SHOLAH</div>
+                <div class="report-meta">SMA UNGGULAN BPPT DARUS SHOLAH | Laporan Transaksi Sekolah</div>
+                <div class="report-meta">Dicetak: {{ now()->format('d-m-Y H:i') }}</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<div class="print-only mb-3" style="font-size:12px;color:#2f4564;line-height:1.7;">
+    <table class="official-meta" style="width:100%;border-collapse:collapse;margin-bottom:10px;">
+        <tr><td style="width:90px;">Nomor</td><td style="width:12px;">:</td><td>{{ $nomorSuratSekolah }}</td><td style="text-align:right;">{{ now()->translatedFormat('d F Y') }}</td></tr>
+        <tr><td>Sifat</td><td>:</td><td colspan="2">Penting</td></tr>
+        <tr><td>Lampiran</td><td>:</td><td colspan="2">1 berkas</td></tr>
+        <tr><td>Hal</td><td>:</td><td colspan="2">Laporan Transaksi Sekolah</td></tr>
+    </table>
+    <div style="margin-bottom:8px;">Yth. Ketua SMA UNGGULAN BPPT DARUS SHOLAH<br>di Tempat</div>
+    <div style="text-align:justify;margin-bottom:8px;">Sehubungan dengan kegiatan administrasi keuangan sekolah, berikut kami sampaikan ringkasan transaksi masuk dan keluar yang tercatat pada periode sesuai filter laporan.</div>
 </div>
 
 <div class="card bg-light border-0 rounded-4 p-4 mb-4 no-print">
@@ -75,9 +143,17 @@
             <label class="form-label small fw-bold text-muted">Smpai Tgl</label>
             <input type="date" name="tanggal_selesai" class="form-control form-control-sm bg-white border" value="{{ $request->tanggal_selesai }}">
         </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-bold text-muted">Per Halaman</label>
+            <select name="per_page" class="form-select form-select-sm bg-white border">
+                @foreach([10, 25, 50, 100] as $size)
+                    <option value="{{ $size }}" {{ (int) $request->per_page === $size || ((empty($request->per_page) && $size === 25)) ? 'selected' : '' }}>{{ $size }}</option>
+                @endforeach
+            </select>
+        </div>
         <div class="col-md-3">
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i> Cari Data</button>
+                <button type="submit" class="btn btn-primary w-100">Cari Data</button>
                 <a href="{{ route('laporan.sekolah') }}" class="btn btn-outline-secondary" title="Reset"><i class="fas fa-sync"></i></a>
             </div>
         </div>
@@ -143,6 +219,12 @@
         <img src="{{ asset('image/logo_pondok.jpeg') }}" style="width: 80px; opacity: 0.5; border-radius: 50%;" alt="Logo">
         <h5 class="mt-3 text-muted">Belum ada data yang sesuai filter</h5>
         <p>Silakan ubah kriteria pencarian.</p>
+    </div>
+@endif
+
+@if(method_exists($data, 'links'))
+    <div class="mt-3 no-print">
+        {{ $data->links() }}
     </div>
 @endif
 
@@ -250,8 +332,18 @@
 
     function printNota() {
         if(currentTransactionId) {
-            window.open('{{ route('cetak.nota', ':id') }}'.replace(':id', currentTransactionId), '_blank');
+            openPrintPopup('{{ route('cetak.nota', ':id') }}'.replace(':id', currentTransactionId));
         }
+    }
+
+    function printLaporanSekolah() {
+        const originalTitle = document.title;
+        const tanggal = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        document.title = 'Sekolah_Export_PDF_' + tanggal;
+        window.print();
+        setTimeout(() => {
+            document.title = originalTitle;
+        }, 400);
     }
 </script>
 @endsection

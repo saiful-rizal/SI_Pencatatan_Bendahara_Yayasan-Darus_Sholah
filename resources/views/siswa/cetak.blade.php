@@ -43,9 +43,11 @@
         <thead>
             <tr>
                 <th>Item</th>
+                <th>Kelas Tagihan</th>
                 <th>Periode</th>
                 <th>Nominal Awal</th>
                 <th>Potongan</th>
+                <th>Keterangan Potongan</th>
                 <th>Pembayaran</th>
                 <th>Sisa</th>
             </tr>
@@ -59,16 +61,34 @@
                 @endphp
                 <tr>
                     <td>{{ $tagihan->itemPembayaran->nama_item ?? '-' }}</td>
-                    <td>{{ $tagihan->periode_bulan ? $tagihan->periode_bulan . '/' . $tagihan->periode_tahun : '-' }}
+                    <td>{{ $tagihan->kelas ?? '-' }}</td>
+                    <td>{{ $tagihan->periode_label }}
                     </td>
                     <td>Rp {{ number_format($tagihan->nominal_awal, 0, ',', '.') }}</td>
                     <td>Rp {{ number_format($potongan, 0, ',', '.') }}</td>
+                    <td>
+                        @if (($tagihan->potongans ?? collect())->count() > 0)
+                            @foreach ($tagihan->potongans as $potonganItem)
+                                <div>- {{ $potonganItem->keterangan }} (Rp
+                                    {{ number_format((float) $potonganItem->nominal_potongan, 0, ',', '.') }})
+                                </div>
+                            @endforeach
+                        @else
+                            -
+                        @endif
+                    </td>
                     <td>Rp {{ number_format($pembayaran, 0, ',', '.') }}</td>
-                    <td>Rp {{ number_format($sisa, 0, ',', '.') }}</td>
+                    <td>
+                        @if($sisa <= 0)
+                            LUNAS
+                        @else
+                            Rp {{ number_format($sisa, 0, ',', '.') }}
+                        @endif
+                    </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" style="text-align:center;">Belum ada tagihan</td>
+                    <td colspan="8" style="text-align:center;">Belum ada tagihan</td>
                 </tr>
             @endforelse
         </tbody>

@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -23,6 +24,16 @@ return new class extends Migration
             $table->enum('status', ['aktif', 'lulus'])->default('aktif');
             $table->timestamps();
         });
+
+        if (Schema::hasTable('tagihans')) {
+            $hasConstraint = collect(DB::select("SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tagihans' AND COLUMN_NAME = 'siswa_id' AND REFERENCED_TABLE_NAME = 'siswas'"))->isNotEmpty();
+
+            if (!$hasConstraint) {
+                Schema::table('tagihans', function (Blueprint $table) {
+                    $table->foreign('siswa_id')->references('id')->on('siswas')->cascadeOnDelete();
+                });
+            }
+        }
     }
 
     public function down(): void

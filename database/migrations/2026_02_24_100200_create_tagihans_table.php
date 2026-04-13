@@ -14,8 +14,9 @@ return new class extends Migration
 
 		Schema::create('tagihans', function (Blueprint $table) {
 			$table->id();
-			$table->foreignId('siswa_id')->constrained('siswas')->cascadeOnDelete();
+			$table->foreignId('siswa_id');
 			$table->foreignId('item_pembayaran_id')->constrained('item_pembayarans')->cascadeOnDelete();
+			$table->string('kelas')->nullable()->index();
 			$table->unsignedTinyInteger('periode_bulan')->nullable();
 			$table->unsignedSmallInteger('periode_tahun')->nullable();
 			$table->decimal('nominal_awal', 15, 2);

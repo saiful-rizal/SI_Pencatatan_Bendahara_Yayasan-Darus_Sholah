@@ -21,6 +21,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'is_super_permanent',
     ];
 
     /**
@@ -41,5 +43,31 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'is_super_permanent' => 'boolean',
     ];
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin';
+    }
+
+    public function isAdminAnggota(): bool
+    {
+        return $this->role === 'admin_anggota';
+    }
+
+    public function createdTransaksis()
+    {
+        return $this->hasMany(Transaksi::class, 'created_by');
+    }
+
+    public function updatedTransaksis()
+    {
+        return $this->hasMany(Transaksi::class, 'updated_by');
+    }
+
+    public function deletionHistories()
+    {
+        return $this->hasMany(DeletionHistory::class, 'deleted_by');
+    }
 }

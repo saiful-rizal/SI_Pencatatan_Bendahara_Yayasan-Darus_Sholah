@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class DetailTransaksi extends Model
 {
-    protected $fillable = ['transaksi_id', 'nama_item', 'harga', 'jumlah', 'subtotal'];
+    protected $fillable = ['transaksi_id', 'item_pembayaran_id', 'nama_item', 'harga', 'jumlah', 'subtotal'];
 
     protected $casts = [
+        'item_pembayaran_id' => 'integer',
         'harga' => 'decimal:2',
         'subtotal' => 'decimal:2'
     ];
@@ -16,5 +17,10 @@ class DetailTransaksi extends Model
     public function transaksi()
     {
         return $this->belongsTo(Transaksi::class);
+    }
+
+    public function itemPembayaran()
+    {
+        return $this->belongsTo(ItemPembayaran::class);
     }
 }

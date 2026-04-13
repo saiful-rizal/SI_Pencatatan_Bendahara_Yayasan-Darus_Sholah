@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\SendCodeResetMail;
-use Illuminate\Support\Str; // Tambahkan library ini untuk generate kode aman
+use Illuminate\Validation\Rules\Password;
 
 class ForgotPasswordController extends Controller
 {
@@ -23,32 +23,31 @@ class ForgotPasswordController extends Controller
     public function sendCode(Request $request)
     {
         // Validasi: Pastikan email ada di tabel users
-        $request->validate(['email' => 'required|email|exists:users,email']);
+        $validated = $request->validate(['email' => ['required', 'email:rfc,dns', 'exists:users,email']]);
 
         // Hapus kode lama jika ada untuk email ini
-        PasswordResetCode::where('email', $request->email)->delete();
+        PasswordResetCode::where('email', $validated['email'])->delete();
 
-        // Generate kode 6 digit (Hanya angka 0-9)
-        // Menggunakan Str::random lebih baik daripada rand untuk keamanan
-        $code = (string) Str::random(6, '0123456789');
+        // Generate OTP 6 digit dengan random_int (cryptographically secure)
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
         // Simpan ke Database dengan masa berlaku 15 menit
         PasswordResetCode::create([
-            'email' => $request->email,
-            'code' => $code,
+            'email' => $validated['email'],
+            'code' => Hash::make($code),
             'expires_at' => now()->addMinutes(15),
         ]);
 
         // Kirim Email dengan Error Handling
         try {
-            Mail::to($request->email)->send(new SendCodeResetMail($code));
+            Mail::to($validated['email'])->send(new SendCodeResetMail($code));
         } catch (\Exception $e) {
             // Jika gagal kirim email (misal konfigurasi .env salah)
             return back()->with('error', 'Gagal mengirim email. Silakan periksa konfigurasi email (.env) atau coba lagi.');
         }
 
         // Simpan email di session untuk langkah verifikasi selanjutnya
-        session(['password_reset_email' => $request->email]);
+        session(['password_reset_email' => $validated['email']]);
 
         // Redirect ke halaman verifikasi kode
         return redirect()->route('password.verify')->with('success', 'Kode telah dikirim ke email Anda.');
@@ -67,17 +66,18 @@ class ForgotPasswordController extends Controller
     // 4. Verifikasi Kode
     public function verifyCode(Request $request)
     {
-        $request->validate(['code' => 'required']);
+        $validated = $request->validate([
+            'code' => ['required', 'digits:6'],
+        ]);
 
         $email = session('password_reset_email');
 
         // Cek kode di database
         $record = PasswordResetCode::where('email', $email)
-            ->where('code', $request->code)
             ->where('expires_at', '>', now()) // Cek apakah masih berlaku
             ->first();
 
-        if (!$record) {
+        if (!$record || !Hash::check($validated['code'], $record->code)) {
             return back()->withErrors(['code' => 'Kode salah atau sudah kadaluarsa.']);
         }
 
@@ -106,7 +106,7 @@ class ForgotPasswordController extends Controller
     {
         // Validasi: Password minimal 6 karakter dan harus sama dengan field 'password_confirmation'
         $request->validate([
-            'password' => 'required|min:6|confirmed',
+            'password' => ['required', 'confirmed', Password::min(8)->letters()->numbers()],
         ]);
 
         $email = session('password_reset_email');

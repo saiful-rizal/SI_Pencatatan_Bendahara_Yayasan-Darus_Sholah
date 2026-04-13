@@ -11,7 +11,19 @@
 <div class="card table-card no-print overflow-hidden">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
         <span class="fw-semibold">Daftar Backup Transaksi</span>
-        <span class="badge bg-light text-dark border">{{ $transaksis->total() }} Data</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark border">{{ $transaksis->total() }} Data</span>
+            <form action="{{ route('transaksi.riwayat.purge') }}" method="POST" class="d-inline" id="purge-transaksi-form">
+                @csrf
+                <input type="hidden" name="scope" value="transaksi">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-delete-confirm"
+                    data-form-id="purge-transaksi-form"
+                    data-confirm-title="Konfirmasi Hapus"
+                    data-confirm-message="Hapus semua backup transaksi secara permanen?"
+                    data-confirm-action-text="Ya, Hapus Semua"
+                    data-confirm-action-class="btn btn-danger">Hapus Semua</button>
+            </form>
+        </div>
     </div>
 
     <div class="table-responsive">
@@ -43,9 +55,14 @@
                         </td>
                         <td class="text-end fw-bold">Rp {{ number_format($t->total_bayar, 0, ',', '.') }}</td>
                         <td class="text-end">
-                            <form action="{{ route('transaksi.restore', $t->id) }}" method="POST" class="d-inline">
+                            <form action="{{ route('transaksi.restore', $t->id) }}" method="POST" class="d-inline" id="restore-transaksi-{{ $t->id }}">
                                 @csrf
-                                <button class="btn btn-sm btn-outline-primary" onclick="return confirm('Pulihkan data transaksi ini?')">
+                                <button type="button" class="btn btn-sm btn-outline-primary btn-delete-confirm"
+                                    data-form-id="restore-transaksi-{{ $t->id }}"
+                                    data-confirm-title="Konfirmasi Pulihkan"
+                                    data-confirm-message="Pulihkan data transaksi ini?"
+                                    data-confirm-action-text="Ya, Pulihkan"
+                                    data-confirm-action-class="btn btn-primary">
                                     <i class="fas fa-rotate-left me-1"></i> Pulihkan
                                 </button>
                             </form>
@@ -59,5 +76,53 @@
     </div>
 
     <div class="card-footer bg-white">{{ $transaksis->links() }}</div>
+</div>
+
+<div class="card table-card no-print overflow-hidden mt-4">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Log Penghapusan Semua Menu</span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-light text-dark border">{{ $deletionHistories->total() }} Data</span>
+            <form action="{{ route('transaksi.riwayat.purge') }}" method="POST" class="d-inline" id="purge-log-form">
+                @csrf
+                <input type="hidden" name="scope" value="log">
+                <button type="button" class="btn btn-sm btn-outline-danger btn-delete-confirm"
+                    data-form-id="purge-log-form"
+                    data-confirm-title="Konfirmasi Hapus"
+                    data-confirm-message="Hapus semua log penghapusan?"
+                    data-confirm-action-text="Ya, Hapus Semua"
+                    data-confirm-action-class="btn btn-danger">Hapus Semua</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Waktu Hapus</th>
+                    <th>Menu</th>
+                    <th>Tipe Data</th>
+                    <th>Data Dihapus</th>
+                    <th>Oleh</th>
+                </tr>
+            </thead>
+            <tbody>
+                @forelse($deletionHistories as $history)
+                    <tr>
+                        <td>{{ optional($history->deleted_at)->format('d-m-Y H:i') }}</td>
+                        <td>{{ $history->menu }}</td>
+                        <td>{{ $history->entity_type }}</td>
+                        <td>{{ $history->label ?? '-' }}</td>
+                        <td>{{ $history->user->name ?? 'Sistem' }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="text-center py-4 text-muted">Belum ada log penghapusan data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card-footer bg-white">{{ $deletionHistories->links() }}</div>
 </div>
 @endsection

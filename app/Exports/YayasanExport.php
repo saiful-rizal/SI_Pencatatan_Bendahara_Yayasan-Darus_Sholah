@@ -28,6 +28,11 @@ class YayasanExport implements FromCollection, WithHeadings, WithStyles, WithTit
     {
         $data = [];
 
+        // Judul laporan
+        $data[] = ['LAPORAN KEUANGAN YAYASAN'];
+        $data[] = ['Tanggal Cetak', now()->format('d-m-Y H:i')];
+        $data[] = [];
+
         // 1. Bagian Pemasukan
         $data[] = ['REKAPITULASI PEMASUKAN'];
         $data[] = ['Kategori', 'Jumlah (Rp)'];
@@ -73,15 +78,26 @@ class YayasanExport implements FromCollection, WithHeadings, WithStyles, WithTit
         $sheet->getColumnDimension('A')->setWidth(30);
         $sheet->getColumnDimension('B')->setWidth(25);
 
-        // Mencari baris untuk styling (Hardcoded berdasarkan struktur collection)
-        // Baris 1 (Pemasukan Header)
+        // Judul utama laporan
+        $sheet->mergeCells('A1:B1');
         $sheet->getStyle('A1:B1')->applyFromArray([
+            'font' => ['bold' => true, 'size' => 14],
+            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        $sheet->getStyle('A2:B2')->applyFromArray([
+            'font' => ['bold' => true],
+        ]);
+
+        // Mencari baris untuk styling (disesuaikan dengan tambahan judul di atas)
+        // Baris 4 (Pemasukan Header)
+        $sheet->getStyle('A4:B4')->applyFromArray([
             'font' => ['bold' => true, 'size' => 12],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']]
         ]);
 
         // Mencari baris Total Pemasukan (dinamis tergantung jumlah data)
-        $rowMasukTotal = 3 + $this->reportMasuk->count();
+        $rowMasukTotal = 6 + $this->reportMasuk->count();
         $sheet->getStyle('A' . $rowMasukTotal . ':B' . $rowMasukTotal)->applyFromArray([
             'font' => ['bold' => true],
             'borders' => ['bottom' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_MEDIUM]]
@@ -109,7 +125,7 @@ class YayasanExport implements FromCollection, WithHeadings, WithStyles, WithTit
         ]);
 
         // Rata kanan kolom angka
-        $sheet->getStyle('B2:B' . $rowSaldo)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        $sheet->getStyle('B5:B' . $rowSaldo)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
         return [];
     }
