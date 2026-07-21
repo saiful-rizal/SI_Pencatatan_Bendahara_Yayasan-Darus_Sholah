@@ -193,7 +193,7 @@ class YayasanExport implements FromCollection, WithHeadings, WithStyles, WithTit
         $sheet->getColumnDimension('C')->setWidth(30);
         $sheet->getColumnDimension('D')->setWidth(20);
         $sheet->getColumnDimension('E')->setWidth(34);
-        $sheet->getColumnDimension('F')->setWidth(16);
+        $sheet->getColumnDimension('F')->setWidth(20);
         $sheet->getColumnDimension('G')->setWidth(20);
 
         // Font dasar yang lebih modern & mudah dibaca

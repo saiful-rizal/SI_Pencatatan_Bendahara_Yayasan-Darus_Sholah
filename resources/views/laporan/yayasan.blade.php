@@ -83,11 +83,21 @@
     }
 </style>
 
+@php
+    $selectedItemCount = collect($groupBy ?? [])->filter(fn($v) => is_numeric($v))->count();
+    $groupLabel = isset($filterItem) ? $filterItem->nama_item : ($selectedItemCount > 0 ? $selectedItemCount . ' item' : 'Kategori');
+    $nomorSurat = '001/B/SMA.U.BPPT.DS/' . now()->format('d/m/Y');
+    $jenisDokumen = isset($filterItem) ? 'Laporan Keuangan Yayasan Per Item - ' . $filterItem->nama_item : ($selectedItemCount > 0 ? 'Laporan Keuangan Yayasan - ' . $selectedItemCount . ' Item' : 'Laporan Keuangan Yayasan');
+    $periodeYayasan = ($request->tanggal_mulai && $request->tanggal_selesai)
+        ? date('d-m-Y', strtotime($request->tanggal_mulai)) . ' s/d ' . date('d-m-Y', strtotime($request->tanggal_selesai))
+        : 'Semua Periode';
+@endphp
+
 <!-- 1. Header Laporan (Tombol Export & Cetak) -->
 <div class="d-flex justify-content-between align-items-center mb-4 no-print flex-wrap gap-2">
     <div>
         <h2 class="fw-bold text-dark mb-1">Laporan Keuangan Yayasan</h2>
-        <small class="text-muted">Rekapitulasi Pemasukan dan Pengeluaran{{ isset($filterItem) ? ' - ' . $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? ' Per Item' : ' Per Kategori') }}</small>
+        <small class="text-muted">Rekapitulasi Pemasukan dan Pengeluaran{{ isset($filterItem) ? ' - ' . $filterItem->nama_item : ($selectedItemCount > 0 ? ' - ' . $selectedItemCount . ' item' : '') }}</small>
     </div>
     <div class="d-flex gap-2">
         <!-- Tombol Export Excel BARU -->
@@ -116,15 +126,6 @@
     </table>
 </div>
 
-@php
-    $groupLabel = isset($filterItem) ? $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? 'Item' : 'Kategori');
-    $nomorSurat = '001/B/SMA.U.BPPT.DS/' . now()->format('d/m/Y');
-    $jenisDokumen = isset($filterItem) ? 'Laporan Keuangan Yayasan Per Item - ' . $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? 'Laporan Keuangan Yayasan Per Item' : 'Laporan Keuangan Yayasan Per Kategori');
-    $periodeYayasan = ($request->tanggal_mulai && $request->tanggal_selesai)
-        ? date('d-m-Y', strtotime($request->tanggal_mulai)) . ' s/d ' . date('d-m-Y', strtotime($request->tanggal_selesai))
-        : 'Semua Periode';
-@endphp
-
 <div class="print-only mb-3" style="font-size:12px;color:#2f4564;line-height:1.7;">
     <table class="official-meta" style="width:100%;border-collapse:collapse;margin-bottom:10px;">
         <tr><td style="width:90px;">Nomor</td><td style="width:12px;">:</td><td>{{ $nomorSurat }}</td><td style="text-align:right;">{{ now()->translatedFormat('d F Y') }}</td></tr>
@@ -141,30 +142,44 @@
 
 <!-- 2. Filter Tanggal (BARU) -->
 <div class="card bg-light border-0 rounded-4 p-4 mb-4 no-print">
-    <form method="GET" action="{{ route('laporan.yayasan') }}" class="row g-3 align-items-end js-auto-filter" data-auto-submit>
-        <div class="col-md-4">
+    <form method="GET" action="{{ route('laporan.yayasan') }}" class="row g-3 align-items-end">
+        <div class="col-md-2">
             <label class="form-label small fw-bold text-muted">Dari Tanggal</label>
             <input type="date" name="tanggal_mulai" class="form-control" value="{{ $request->tanggal_mulai }}">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <label class="form-label small fw-bold text-muted">Sampai Tanggal</label>
             <input type="date" name="tanggal_selesai" class="form-control" value="{{ $request->tanggal_selesai }}">
         </div>
-        <div class="col-md-3">
-            <label class="form-label small fw-bold text-muted">Kelompokkan Berdasarkan</label>
-            <select name="group_by" class="form-select">
-                <option value="kategori" {{ ($groupBy ?? 'kategori') === 'kategori' ? 'selected' : '' }}>Per Kategori</option>
-                <option value="per_item" {{ ($groupBy ?? '') === 'per_item' ? 'selected' : '' }}>Per Item</option>
-                @foreach($itemPembayaranList as $item)
-                    <option value="{{ $item->id }}" {{ (string) ($groupBy ?? '') === (string) $item->id ? 'selected' : '' }}>
-                        {{ $item->kode }} - {{ $item->nama_item }}
-                    </option>
-                @endforeach
-            </select>
+        <div class="col-md-5">
+            <label class="form-label small fw-bold text-muted">Filter Item</label>
+            <div class="dropdown w-100" data-bs-auto-close="outside">
+                <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start py-2 px-3" type="button" id="groupByDropdownButton" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" style="white-space: normal;">
+                    @php
+                        $selectedItems = collect($groupBy ?? [])->filter(fn($v) => is_numeric($v));
+                    @endphp
+                    {{ $selectedItems->count() > 0 ? $selectedItems->count() . ' item dipilih' : 'Pilih Item' }}
+                </button>
+                <div class="dropdown-menu p-2 shadow-sm border-0" aria-labelledby="groupByDropdownButton" id="groupByDropdownMenu" style="max-height: 360px; overflow-y: auto; width: max(100%, 480px);">
+                    <div class="dropdown-item rounded px-2 py-2 mb-1 d-flex align-items-center border-bottom" style="gap: 8px;">
+                        <input class="form-check-input my-0 flex-shrink-0" type="checkbox" id="checkAllGroupBy" style="margin-top: 0;">
+                        <label class="small fw-semibold w-100 mb-0" for="checkAllGroupBy">Pilih Semua</label>
+                    </div>
+                    @foreach($itemPembayaranList as $item)
+                        <div class="dropdown-item rounded px-2 py-1 mb-1 group-by-option d-flex align-items-center" style="gap: 8px;">
+                            <input class="form-check-input group-by-checkbox my-0 flex-shrink-0" type="checkbox" name="group_by[]" value="{{ $item->id }}" id="groupByItem{{ $item->id }}" {{ in_array((string) $item->id, array_map('strval', $groupBy ?? [])) ? 'checked' : '' }} style="margin-top: 0;">
+                            <label class="small w-100 mb-0 d-flex justify-content-between align-items-center" style="gap: 8px;" for="groupByItem{{ $item->id }}">
+                                <span class="fw-semibold">{{ $item->kode }} - {{ $item->nama_item }}</span>
+                                <span class="text-muted text-nowrap">Rp {{ number_format((float) ($item->nominal ?? 0), 0, ',', '.') }}</span>
+                            </label>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-3">
             <div class="d-flex gap-2">
-                <button type="submit" class="btn btn-primary w-100">Filter</button>
+                <button type="submit" class="btn btn-primary flex-fill">Filter</button>
                 <a href="{{ route('laporan.yayasan') }}" class="btn btn-outline-secondary" title="Reset"><i class="fas fa-undo"></i></a>
             </div>
         </div>
@@ -295,97 +310,102 @@
 </div>
 
 <div class="print-only">
-    <table class="table table-bordered table-sm" style="width:100%;border-collapse:collapse;font-size:11px;">
-        <thead>
-            <tr>
-                <th style="width:28px;">No</th>
-                <th style="width:65px;">Tanggal</th>
-                <th>Uraian / Nama Siswa</th>
-                <th style="width:55px;">Kelas</th>
-                <th>Item / Keterangan</th>
-                <th style="width:90px;">Metode</th>
-                <th style="width:105px;">Nominal</th>
-            </tr>
-        </thead>
+    <table class="table table-bordered table-sm" style="width:100%;border-collapse:collapse;font-size:12px;">
+        <colgroup>
+            <col style="width:24px;">
+            <col style="width:70px;">
+            <col style="width:auto;">
+            <col style="width:50px;">
+            <col style="width:auto;">
+            <col style="width:80px;">
+            <col style="width:90px;">
+        </colgroup>
         <tbody>
-            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">I. REKAPITULASI PEMASUKAN</td></tr>
+            <tr><td colspan="7" style="font-weight:700;background:#1e3655;color:#fff;font-size:11px;padding:4px 6px;">I. RINCIAN PEMASUKAN</td></tr>
+            <tr style="background:#f1f5f9;">
+                <th style="text-align:center;padding:3px 4px;">No</th>
+                <th style="text-align:center;padding:3px 4px;">Tanggal</th>
+                <th style="text-align:left;padding:3px 4px;">Nama Siswa / Uraian</th>
+                <th style="text-align:center;padding:3px 4px;">Kelas</th>
+                <th style="text-align:left;padding:3px 4px;">Item / Keterangan</th>
+                <th style="text-align:center;padding:3px 4px;">Metode</th>
+                <th style="text-align:right;padding:3px 4px;">Jumlah (Rp)</th>
+            </tr>
             @php $noMasuk = 1; @endphp
             @forelse($reportMasuk as $key => $total)
-                <tr style="background:#f3f4f6;">
-                    <td colspan="5" style="font-weight:700;">{{ $key }}</td>
-                    <td style="font-weight:700;">Subtotal</td>
-                    <td style="font-weight:700;">Rp {{ number_format($total, 0, ',', '.') }}</td>
+                <tr style="background:#f8fafc;">
+                    <td colspan="5" style="font-weight:700;padding:3px 6px;">{{ $key }}</td>
+                    <td style="font-weight:700;text-align:center;padding:3px 6px;">Subtotal</td>
+                    <td style="font-weight:700;text-align:right;padding:3px 6px;">{{ number_format($total, 0, ',', '.') }}</td>
                 </tr>
                 @foreach(($detailMasuk[$key] ?? []) as $row)
                 <tr>
-                    <td>{{ $noMasuk++ }}</td>
-                    <td>{{ $row['tanggal'] }}</td>
-                    <td>{{ $row['nama_siswa'] }}</td>
-                    <td>{{ $row['kelas'] }}</td>
-                    <td>{{ $row['item'] }}</td>
-                    <td>{{ $row['metode'] ?? '-' }}</td>
-                    <td>Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $noMasuk++ }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['tanggal'] }}</td>
+                    <td style="padding:2px 4px;">{{ $row['nama_siswa'] }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['kelas'] }}</td>
+                    <td style="padding:2px 4px;">{{ $row['item'] }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['metode'] ?? '-' }}</td>
+                    <td style="text-align:right;padding:2px 4px;">{{ number_format($row['nominal'], 0, ',', '.') }}</td>
                 </tr>
                 @endforeach
             @empty
-                <tr><td colspan="7">Tidak ada data pemasukan.</td></tr>
+                <tr><td colspan="7" style="padding:8px;text-align:center;">Tidak ada data pemasukan.</td></tr>
             @endforelse
             <tr>
-                <td colspan="5" style="font-weight:700;text-align:right;">Total Pemasukan</td>
-                <td></td>
-                <td style="font-weight:700;">Rp {{ number_format($totalMasuk, 0, ',', '.') }}</td>
+                <td colspan="5" style="font-weight:700;text-align:right;padding:4px 6px;">TOTAL PEMASUKAN</td>
+                <td style="padding:4px 6px;"></td>
+                <td style="font-weight:700;text-align:right;padding:4px 6px;">{{ number_format($totalMasuk, 0, ',', '.') }}</td>
             </tr>
 
-            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">II. REKAPITULASI PENGELUARAN</td></tr>
-            @if($reportKeluar->isNotEmpty())
-            <tr style="background:#f8fafc;font-size:10px;color:#475569;">
-                <th style="text-align:left;">No</th>
-                <th style="text-align:left;">Tanggal</th>
-                <th style="text-align:left;">Item</th>
-                <th style="text-align:left;">Jumlah x Harga</th>
-                <th style="text-align:left;">Keterangan</th>
-                <th style="text-align:left;">Dicatat Oleh</th>
-                <th style="text-align:left;">Nominal</th>
+            <tr><td colspan="7" style="font-weight:700;background:#1e3655;color:#fff;font-size:11px;padding:4px 6px;">II. RINCIAN PENGELUARAN</td></tr>
+            <tr style="background:#f1f5f9;">
+                <th style="text-align:center;padding:3px 4px;">No</th>
+                <th style="text-align:center;padding:3px 4px;">Tanggal</th>
+                <th style="text-align:left;padding:3px 4px;">Item</th>
+                <th style="text-align:center;padding:3px 4px;">Jml x Hrg</th>
+                <th style="text-align:left;padding:3px 4px;">Keterangan</th>
+                <th style="text-align:center;padding:3px 4px;">Dicatat</th>
+                <th style="text-align:right;padding:3px 4px;">Jumlah (Rp)</th>
             </tr>
-            @endif
             @php $noKeluar = 1; @endphp
             @forelse($reportKeluar as $key => $total)
-                <tr style="background:#f3f4f6;">
-                    <td colspan="5" style="font-weight:700;">{{ $key }}</td>
-                    <td style="font-weight:700;">Subtotal</td>
-                    <td style="font-weight:700;">Rp {{ number_format($total, 0, ',', '.') }}</td>
+                <tr style="background:#f8fafc;">
+                    <td colspan="5" style="font-weight:700;padding:3px 6px;">{{ $key }}</td>
+                    <td style="font-weight:700;text-align:center;padding:3px 6px;">Subtotal</td>
+                    <td style="font-weight:700;text-align:right;padding:3px 6px;">{{ number_format($total, 0, ',', '.') }}</td>
                 </tr>
                 @foreach(($detailKeluar[$key] ?? []) as $row)
                 <tr>
-                    <td>{{ $noKeluar++ }}</td>
-                    <td>{{ $row['tanggal'] }}</td>
-                    <td>{{ $row['item'] }}</td>
-                    <td>{{ $row['jumlah_label'] }}</td>
-                    <td>{{ $row['keterangan'] }}</td>
-                    <td>{{ $row['dicatat_oleh'] ?? '-' }}</td>
-                    <td>Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $noKeluar++ }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['tanggal'] }}</td>
+                    <td style="padding:2px 4px;">{{ $row['item'] }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['jumlah_label'] }}</td>
+                    <td style="padding:2px 4px;">{{ $row['keterangan'] }}</td>
+                    <td style="text-align:center;padding:2px 4px;">{{ $row['dicatat_oleh'] ?? '-' }}</td>
+                    <td style="text-align:right;padding:2px 4px;">{{ number_format($row['nominal'], 0, ',', '.') }}</td>
                 </tr>
                 @endforeach
             @empty
-                <tr><td colspan="7">Tidak ada data pengeluaran.</td></tr>
+                <tr><td colspan="7" style="padding:8px;text-align:center;">Tidak ada data pengeluaran.</td></tr>
             @endforelse
             <tr>
-                <td colspan="5" style="font-weight:700;text-align:right;">Total Pengeluaran</td>
-                <td></td>
-                <td style="font-weight:700;">Rp {{ number_format($totalKeluar, 0, ',', '.') }}</td>
+                <td colspan="5" style="font-weight:700;text-align:right;padding:4px 6px;">TOTAL PENGELUARAN</td>
+                <td style="padding:4px 6px;"></td>
+                <td style="font-weight:700;text-align:right;padding:4px 6px;">{{ number_format($totalKeluar, 0, ',', '.') }}</td>
             </tr>
 
-            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">III. POSISI AKHIR</td></tr>
-            <tr>
-                <td colspan="5" style="font-weight:700;text-align:right;">Laba / Rugi Bersih</td>
-                <td></td>
-                <td style="font-weight:700;">Rp {{ number_format($saldo, 0, ',', '.') }}</td>
+            <tr><td colspan="7" style="font-weight:700;background:#1e3655;color:#fff;font-size:11px;padding:4px 6px;">III. POSISI AKHIR</td></tr>
+            <tr style="background:#f1f5f9;">
+                <td colspan="5" style="font-weight:700;text-align:right;padding:4px 6px;">LABA / RUGI BERSIH</td>
+                <td style="padding:4px 6px;"></td>
+                <td style="font-weight:700;text-align:right;padding:4px 6px;font-size:12px;">{{ number_format($saldo, 0, ',', '.') }}</td>
             </tr>
-            <tr><td colspan="7" style="border:none;"><br><strong>Jenis Dokumen:</strong> {{ $jenisDokumen }}<br><strong>Nomor Dokumen:</strong> {{ $nomorSurat }}<br><strong>Periode:</strong> {{ $periodeYayasan }}<br><strong>Dicetak Oleh:</strong> {{ auth()->user()->name ?? '-' }}</td></tr>
+            <tr><td colspan="7" style="border:none;padding:8px 6px 2px;"><strong>Jenis Dokumen:</strong> {{ $jenisDokumen }}<br><strong>Nomor Dokumen:</strong> {{ $nomorSurat }}<br><strong>Periode:</strong> {{ $periodeYayasan }}<br><strong>Dicetak Oleh:</strong> {{ auth()->user()->name ?? '-' }}</td></tr>
         </tbody>
     </table>
 
-    <table style="width:100%;border-collapse:collapse;margin-top:36px;font-size:11px;">
+    <table style="width:100%;border-collapse:collapse;margin-top:30px;font-size:12px;">
         <tr>
             <td style="width:60%;"></td>
             <td style="width:40%;text-align:center;">Jember, {{ now()->translatedFormat('d F Y') }}<br>Dibuat oleh, Bendahara</td>
@@ -413,5 +433,50 @@
             document.title = originalTitle;
         }, 400);
     }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        const menu = document.getElementById('groupByDropdownMenu');
+        if (!menu) return;
+
+        menu.addEventListener('click', function (event) {
+            event.stopPropagation();
+        });
+
+        const checkboxes = Array.from(document.querySelectorAll('.group-by-checkbox'));
+        const button = document.getElementById('groupByDropdownButton');
+
+        function updateButtonLabel() {
+            const items = checkboxes.filter(cb => cb.checked);
+            button.textContent = items.length > 0 ? items.length + ' item dipilih' : 'Pilih Item';
+
+            const all = document.getElementById('checkAllGroupBy');
+            if (all) {
+                all.checked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+                all.indeterminate = items.length > 0 && items.length < checkboxes.length;
+            }
+        }
+
+        document.getElementById('checkAllGroupBy').addEventListener('change', function () {
+            checkboxes.forEach(cb => { cb.checked = this.checked; });
+            updateButtonLabel();
+        });
+
+        checkboxes.forEach(function (cb) {
+            cb.addEventListener('change', updateButtonLabel);
+        });
+
+        document.querySelectorAll('.group-by-option').forEach(function (option) {
+            option.addEventListener('click', function (event) {
+                if (event.target instanceof HTMLInputElement) return;
+                event.preventDefault();
+                const cb = option.querySelector('.group-by-checkbox');
+                if (!cb) return;
+                cb.checked = !cb.checked;
+                cb.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+
+        updateButtonLabel();
+    });
 </script>
 @endsection

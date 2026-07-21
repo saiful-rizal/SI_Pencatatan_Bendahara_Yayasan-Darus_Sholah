@@ -805,26 +805,22 @@ class BendaharaController extends Controller
         $request->validate([
             'tanggal_mulai' => ['nullable', 'date'],
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
-            'group_by' => ['nullable', 'string'],
+            'group_by' => ['nullable', 'array'],
         ]);
 
-        $groupBy = $request->input('group_by', 'kategori');
+        $groupByArray = $request->input('group_by', []);
         $itemPembayaranList = ItemPembayaran::query()
             ->orderBy('nama_item')
-            ->get(['id', 'kode', 'nama_item']);
+            ->get(['id', 'kode', 'nama_item', 'nominal']);
 
-        if ($groupBy === 'per_item') {
-            $data = $this->buildLaporanYayasanPerItem($request);
-        } elseif (is_numeric($groupBy)) {
-            $itemPembayaran = ItemPembayaran::find((int) $groupBy);
-            $data = $itemPembayaran
-                ? $this->buildLaporanYayasanFilterItem($request, $itemPembayaran)
-                : $this->buildLaporanYayasanPerKategori($request);
+        $itemIds = array_filter($groupByArray, 'is_numeric');
+        if (!empty($itemIds)) {
+            $data = $this->buildLaporanYayasanFilterItems($request, array_map('intval', $itemIds));
         } else {
             $data = $this->buildLaporanYayasanPerKategori($request);
         }
 
-        $data['groupBy'] = $groupBy;
+        $data['groupBy'] = $groupByArray;
         $data['request'] = $request;
         $data['itemPembayaranList'] = $itemPembayaranList;
 
@@ -1027,26 +1023,85 @@ class BendaharaController extends Controller
         ];
     }
 
+    private function buildLaporanYayasanFilterItems(Request $request, array $itemIds): array
+    {
+        $tanggalMulai = $request->input('tanggal_mulai');
+        $tanggalSelesai = $request->input('tanggal_selesai');
+
+        $transaksiIdsViaTagihan = Transaksi::query()
+            ->select('transaksis.id')
+            ->join('pembayaran_tagihans', 'pembayaran_tagihans.id', '=', 'transaksis.pembayaran_tagihan_id')
+            ->join('tagihans', 'tagihans.id', '=', 'pembayaran_tagihans.tagihan_id')
+            ->whereIn('tagihans.item_pembayaran_id', $itemIds)
+            ->where('transaksis.jenis', 'Masuk')
+            ->when($tanggalMulai && $tanggalSelesai, fn ($q) => $q->whereBetween('transaksis.tanggal', [$tanggalMulai, $tanggalSelesai]))
+            ->pluck('id');
+
+        $transaksiIdsViaDetail = DetailTransaksi::query()
+            ->whereIn('item_pembayaran_id', $itemIds)
+            ->pluck('transaksi_id');
+
+        $allIds = $transaksiIdsViaTagihan
+            ->merge($transaksiIdsViaDetail)
+            ->unique()
+            ->values();
+
+        if ($allIds->isEmpty()) {
+            return [
+                'reportMasuk' => collect(),
+                'reportKeluar' => collect(),
+                'detailMasuk' => collect(),
+                'detailKeluar' => collect(),
+                'totalMasuk' => 0,
+                'totalKeluar' => 0,
+                'saldo' => 0,
+            ];
+        }
+
+        $queryMasuk = Transaksi::whereIn('id', $allIds)->where('jenis', 'Masuk');
+        $queryKeluar = Transaksi::whereIn('id', $allIds)->where('jenis', 'Keluar');
+
+        if ($tanggalMulai && $tanggalSelesai) {
+            $queryMasuk->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
+            $queryKeluar->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
+        }
+
+        $masuk = $queryMasuk->get();
+        $keluar = $queryKeluar->get();
+
+        $detailMasuk = DetailTransaksi::whereIn('transaksi_id', $masuk->pluck('id'))
+            ->selectRaw('transaksi_id, nama_item, SUM(subtotal) as total')
+            ->groupBy('transaksi_id', 'nama_item')
+            ->get()
+            ->groupBy('nama_item')
+            ->map(fn ($items) => $items->sum('total'));
+
+        return [
+            'reportMasuk' => $detailMasuk,
+            'reportKeluar' => $keluar->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'detailMasuk' => $this->buildDetailMasuk($masuk, 'per_item'),
+            'detailKeluar' => $this->buildDetailKeluar($keluar),
+            'totalMasuk' => $masuk->sum('total_bayar'),
+            'totalKeluar' => $keluar->sum('total_bayar'),
+            'saldo' => $masuk->sum('total_bayar') - $keluar->sum('total_bayar'),
+        ];
+    }
+
     // Export Excel Yayasan
     public function exportYayasan(Request $request)
     {
         $request->validate([
             'tanggal_mulai' => ['nullable', 'date'],
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
-            'group_by' => ['nullable', 'string'],
+            'group_by' => ['nullable', 'array'],
         ]);
 
-        $groupBy = $request->input('group_by', 'kategori');
+        $groupByArray = $request->input('group_by', []);
 
-        if ($groupBy === 'per_item') {
-            $data = $this->buildLaporanYayasanPerItem($request);
-            $groupLabel = 'Per Item';
-        } elseif (is_numeric($groupBy)) {
-            $itemPembayaran = ItemPembayaran::find((int) $groupBy);
-            $data = $itemPembayaran
-                ? $this->buildLaporanYayasanFilterItem($request, $itemPembayaran)
-                : $this->buildLaporanYayasanPerKategori($request);
-            $groupLabel = $itemPembayaran?->nama_item ?? 'Per Kategori';
+        $itemIds = array_filter($groupByArray, 'is_numeric');
+        if (!empty($itemIds)) {
+            $data = $this->buildLaporanYayasanFilterItems($request, array_map('intval', $itemIds));
+            $groupLabel = count($itemIds) . ' item';
         } else {
             $data = $this->buildLaporanYayasanPerKategori($request);
             $groupLabel = 'Per Kategori';
