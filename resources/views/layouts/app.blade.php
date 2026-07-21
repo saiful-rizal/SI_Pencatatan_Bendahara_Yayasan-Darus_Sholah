@@ -1820,7 +1820,10 @@
                 let timer = null;
                 const scheduleSubmit = () => {
                     clearTimeout(timer);
-                    timer = setTimeout(() => form.submit(), 450);
+                    timer = setTimeout(() => {
+                        if (document.querySelector('.modal.show')) return;
+                        form.submit();
+                    }, 450);
                 };
 
                 form.querySelectorAll('input, select, textarea').forEach((field) => {

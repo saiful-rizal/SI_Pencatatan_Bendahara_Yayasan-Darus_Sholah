@@ -145,13 +145,18 @@ class BendaharaController extends Controller
         $pengeluarans = $query->latest('tanggal')->paginate(10)->appends($request->query());
         $totalPengeluaran = (clone $query)->sum('total_bayar');
 
-        return view('keuangan.pengeluaran', compact('pengeluarans', 'totalPengeluaran', 'request'));
+        $itemPembayaranList = ItemPembayaran::query()
+            ->orderBy('nama_item')
+            ->get(['id', 'kode', 'nama_item', 'nominal']);
+
+        return view('keuangan.pengeluaran', compact('pengeluarans', 'totalPengeluaran', 'request', 'itemPembayaranList'));
     }
 
     public function storePengeluaran(Request $request)
     {
         $validated = $request->validate([
-            'kategori' => ['required', 'string', 'max:100'],
+            'kategori' => ['required', 'array', 'min:1'],
+            'kategori.*' => ['nullable', 'string', 'max:100'],
             'tanggal' => ['required', 'date'],
             'nama_siswa' => ['nullable', 'string', 'max:150'],
             'catatan' => ['nullable', 'string', 'max:500'],
@@ -162,6 +167,8 @@ class BendaharaController extends Controller
             'jumlah' => ['required', 'array', 'size:' . count($request->input('nama_item', []))],
             'jumlah.*' => ['required', 'integer', 'min:1'],
         ]);
+
+        $validated['kategori'] = implode(', ', array_filter($validated['kategori']));
 
         DB::transaction(function () use ($validated) {
             $totalBayar = 0;
