@@ -24,7 +24,7 @@
 
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end js-auto-filter">
+        <form method="GET" class="row g-2 align-items-end js-auto-filter" data-auto-submit>
             <div class="col-md-3"><label class="form-label small">NIS / Nama</label><input name="nis" value="{{ request('nis') }}" class="form-control"></div>
             <div class="col-md-2">
                 <label class="form-label small">Kelas</label>
@@ -54,7 +54,10 @@
                     @endforeach
                 </select>
             </div>
-            <div class="col-md-1 d-grid"><button class="btn btn-primary" type="submit">Tampilkan</button></div>
+            <div class="col-md-2 d-flex gap-2 mt-3">
+                <button class="btn btn-primary flex-fill" type="submit">Tampilkan</button>
+                <a href="{{ route('rekap.index') }}" class="btn btn-outline-secondary flex-fill">Reset</a>
+            </div>
         </form>
     </div>
 </div>
@@ -109,7 +112,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
+                        <table class="table table-sm align-middle mb-0" data-paginate="true" data-page-size="10">
                             <thead>
                                 <tr>
                                     <th>Item</th>

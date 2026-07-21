@@ -92,7 +92,8 @@
 </div>
 
 @php
-    $nomorSuratSekolah = 'DS/SKL/' . now()->format('Y/m') . '/' . str_pad((string) $data->count(), 3, '0', STR_PAD_LEFT);
+    $totalDataSekolah = method_exists($data, 'total') ? $data->total() : $data->count();
+    $nomorSuratSekolah = 'DS/SKL/' . now()->format('Y/m') . '/' . str_pad((string) $totalDataSekolah, 3, '0', STR_PAD_LEFT);
 @endphp
 
 <div class="report-head mb-3 print-only">

@@ -326,12 +326,17 @@
             <tbody>
                 @forelse($transaksis as $t)
                     <tr>
-                        <td>{{ $t->tanggal->format('d-m-Y') }}</td>
+                        <td>{{ $t->tanggal->format('d-m-Y H:i') }}</td>
                         <td>
                             <span>{{ $t->nama_siswa ?? '-' }}</span>
                             <small class="text-muted ms-1">{{ $t->kelas ?? '-' }}</small>
                         </td>
-                        <td>{{ $t->kategori }}</td>
+                        <td>
+                            {{ $t->kategori }}
+                            @if(($t->item_count ?? 1) > 1)
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">{{ $t->item_count }} item</span>
+                            @endif
+                        </td>
                         <td>
                             @if($t->jenis === 'Masuk')
                                 <span class="badge bg-success">Masuk</span>

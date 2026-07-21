@@ -34,7 +34,7 @@ class RekapController extends Controller
         $siswaQuery = Siswa::query()
             ->select(['id', 'nis', 'nama', 'kelas', 'angkatan'])
             ->with(['tagihans' => function ($query) use ($tanggalMulai, $tanggalSelesai) {
-                $query->select(['id', 'siswa_id', 'item_pembayaran_id', 'periode_bulan', 'periode_tahun', 'nominal_awal'])
+                $query->select(['id', 'siswa_id', 'item_pembayaran_id', 'kelas', 'periode_bulan', 'periode_tahun', 'nominal_awal', 'status'])
                     ->with('itemPembayaran:id,nama_item')
                     ->with(['potongans:id,tagihan_id,keterangan,nominal_potongan'])
                     ->withSum('potongans as total_potongan', 'nominal_potongan')
@@ -66,7 +66,9 @@ class RekapController extends Controller
         $rekapPaginator = $siswaQuery->orderBy('nama')->paginate($perPage)->appends($request->query());
 
         $rekap = collect($rekapPaginator->items())->map(function ($siswa) {
-            $detail = $siswa->tagihans->map(function ($tagihan) {
+            $detail = $siswa->tagihans
+                ->sortBy(fn ($tagihan) => (int) ($tagihan->periode_bulan ?? 0))
+                ->map(function ($tagihan) {
                 $potongan = (float) ($tagihan->total_potongan ?? 0);
                 $bayar = (float) ($tagihan->total_pembayaran ?? 0);
                 $totalAkhir = max(0, (float) $tagihan->nominal_awal - $potongan);
@@ -81,6 +83,7 @@ class RekapController extends Controller
                     'item' => $tagihan->itemPembayaran->nama_item ?? '-',
                     'kelas' => $tagihan->kelas ?? '-',
                     'periode' => $tagihan->periode_label,
+                    'periode_bulan' => (int) ($tagihan->periode_bulan ?? 0),
                     'nominal_awal' => (float) $tagihan->nominal_awal,
                     'potongan' => $potongan,
                     'potongan_keterangan' => $keteranganPotongan !== '' ? $keteranganPotongan : '-',
@@ -199,7 +202,7 @@ class RekapController extends Controller
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
         ]);
 
-        $query = Tagihan::with('siswa')
+        $query = Tagihan::with(['siswa', 'itemPembayaran:id,nama_item', 'potongans:id,tagihan_id,keterangan,nominal_potongan'])
             ->withSum('potongans as total_potongan', 'nominal_potongan')
             ->withSum('pembayarans as total_pembayaran', 'nominal_bayar');
 
@@ -229,10 +232,32 @@ class RekapController extends Controller
             });
         }
 
-        $data = $query->orderByDesc('id')->get();
+        $data = $query->orderBy('siswa_id')->orderByDesc('id')->get();
+
+        // Urutkan hasil export: per siswa, pisahkan dulu grup "Belum Lunas" lalu "Lunas",
+        // dan di dalam masing-masing grup diurutkan dari bulan awal ke akhir.
+        $data = $data->sortBy(function ($tagihan) {
+            $potongan = (float) ($tagihan->total_potongan ?? 0);
+            $bayar = (float) ($tagihan->total_pembayaran ?? 0);
+            $totalAkhir = max(0, (float) $tagihan->nominal_awal - $potongan);
+            $sisa = max(0, $totalAkhir - $bayar);
+            $statusOrder = $sisa > 0 ? 0 : 1; // 0 = Belum Lunas tampil duluan, 1 = Lunas
+
+            return sprintf('%010d-%d-%02d', (int) $tagihan->siswa_id, $statusOrder, (int) ($tagihan->periode_bulan ?? 0));
+        })->values();
+
+        $filterInfo = [
+            'nis' => $validated['nis'] ?? null,
+            'kelas' => $kelas,
+            'angkatan' => $validated['angkatan'] ?? null,
+            'tanggal_mulai' => $validated['tanggal_mulai'] ?? null,
+            'tanggal_selesai' => $validated['tanggal_selesai'] ?? null,
+            'dicetak_oleh' => auth()->user()->name ?? '-',
+        ];
+
         $fileName = 'Rekap_Keuangan_' . now()->format('Y-m-d_His') . '.xlsx';
 
-        return Excel::download(new RekapExport($data), $fileName);
+        return Excel::download(new RekapExport($data, $filterInfo), $fileName);
     }
 
     private function applyKelasFilter($query, ?string $kelas): void

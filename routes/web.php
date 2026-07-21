@@ -18,8 +18,11 @@ use App\Http\Controllers\TagihanController;
 | ROUTE PUBLIK (Tanpa Login)
 |--------------------------------------------------------------------------
 */
-Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->middleware(['security.request', 'throttle:5,1']);
+Route::get('/login', function () {
+    return redirect()->route('login');
+});
+Route::get('/', [AuthController::class, 'showLoginForm'])->name('login');
+Route::post('/login', [AuthController::class, 'login'])->middleware(['security.request', 'throttle:5,1'])->name('login.submit');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
 Route::get('/forgot-password', [ForgotPasswordController::class, 'showForgotForm'])->name('password.request');
@@ -33,7 +36,7 @@ Route::post('/reset-password', [ForgotPasswordController::class, 'resetPassword'
 
 Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->group(function () {
 
-    Route::get('/', [BendaharaController::class, 'index'])->name('home');
+    Route::get('/dashboard', [BendaharaController::class, 'index'])->name('home');
 
     Route::middleware('role:super_admin,admin_anggota')->group(function () {
         Route::middleware('role:super_admin')->group(function () {
@@ -45,6 +48,7 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
         Route::get('/item-pembayaran', [ItemPembayaranController::class, 'index'])->name('item.index');
         Route::get('/item-pembayaran/tambah', [ItemPembayaranController::class, 'create'])->name('item.create');
         Route::post('/item-pembayaran', [ItemPembayaranController::class, 'store'])->name('item.store');
+        Route::delete('/item-pembayaran/hapus-semua', [ItemPembayaranController::class, 'destroyAll'])->name('item.destroy-all');
         Route::put('/item-pembayaran/{item}', [ItemPembayaranController::class, 'update'])->name('item.update');
         Route::put('/item-pembayaran/{item}/toggle-aktif', [ItemPembayaranController::class, 'toggleAktif'])->name('item.toggle-aktif');
         Route::delete('/item-pembayaran/{item}', [ItemPembayaranController::class, 'destroy'])->name('item.destroy');
@@ -52,8 +56,10 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
 
         Route::get('/data-siswa', [SiswaController::class, 'index'])->name('siswa.index');
         Route::get('/data-siswa/export', [SiswaController::class, 'export'])->name('siswa.export');
+        Route::get('/data-siswa/{siswa}/export-detail', [SiswaController::class, 'exportDetail'])->name('siswa.export-detail');
         Route::post('/data-siswa', [SiswaController::class, 'store'])->name('siswa.store');
         Route::put('/data-siswa/{siswa}', [SiswaController::class, 'update'])->name('siswa.update');
+        Route::delete('/data-siswa/hapus-semua', [SiswaController::class, 'destroyAll'])->name('siswa.destroy-all');
         Route::delete('/data-siswa/{siswa}', [SiswaController::class, 'destroy'])->name('siswa.destroy');
         Route::post('/data-siswa/naik-kelas', [SiswaController::class, 'naikKelasMassal'])->name('siswa.naik-kelas');
         Route::post('/data-siswa/import', [SiswaController::class, 'import'])->middleware('throttle:5,1')->name('siswa.import');
@@ -63,6 +69,7 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
         Route::get('/tagihan/tambah', [TagihanController::class, 'create'])->name('tagihan.create');
         Route::post('/tagihan', [TagihanController::class, 'store'])->name('tagihan.store');
         Route::put('/tagihan/{tagihan}', [TagihanController::class, 'update'])->name('tagihan.update');
+        Route::delete('/tagihan/hapus-semua/{siswa}', [TagihanController::class, 'destroyAllBySiswa'])->name('tagihan.destroy-all-siswa');
         Route::delete('/tagihan/{tagihan}', [TagihanController::class, 'destroy'])->name('tagihan.destroy');
         Route::post('/tagihan/{tagihan}/potongan', [TagihanController::class, 'tambahPotongan'])->name('tagihan.potongan.store');
         Route::put('/tagihan/{tagihan}/potongan/{potongan}', [TagihanController::class, 'updatePotongan'])->name('tagihan.potongan.update');
@@ -71,13 +78,17 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
         Route::get('/rekap', [RekapController::class, 'index'])->name('rekap.index');
         Route::get('/rekap/export', [RekapController::class, 'export'])->name('rekap.export');
 
+        Route::get('/cetak/nota/{id}', [BendaharaController::class, 'cetakNota'])->name('cetak.nota');
+        Route::delete('/transaksi/{id}', [BendaharaController::class, 'destroy'])->middleware('throttle:20,1')->name('transaksi.destroy');
+
         Route::middleware('role:super_admin')->group(function () {
             Route::post('/transaksi', [BendaharaController::class, 'store'])->middleware('throttle:30,1')->name('transaksi.store');
-            Route::delete('/transaksi/{id}', [BendaharaController::class, 'destroy'])->middleware('throttle:20,1')->name('transaksi.destroy');
             Route::get('/riwayat-hapus', [BendaharaController::class, 'riwayat'])->name('transaksi.riwayat');
             Route::post('/riwayat-hapus/{id}/restore', [BendaharaController::class, 'restore'])->middleware('throttle:20,1')->name('transaksi.restore');
+            Route::post('/riwayat-hapus/restore-all', [BendaharaController::class, 'restoreAll'])->middleware('throttle:10,1')->name('transaksi.restore.all');
+            Route::post('/riwayat-hapus/log/{id}/restore', [BendaharaController::class, 'restoreDeletionHistory'])->middleware('throttle:20,1')->name('riwayat.log.restore');
+            Route::post('/riwayat-hapus/log/restore-all', [BendaharaController::class, 'restoreDeletionHistoryAll'])->middleware('throttle:10,1')->name('riwayat.log.restore.all');
             Route::post('/riwayat-hapus/purge', [BendaharaController::class, 'purgeRiwayat'])->middleware('throttle:10,1')->name('transaksi.riwayat.purge');
-            Route::get('/cetak/nota/{id}', [BendaharaController::class, 'cetakNota'])->name('cetak.nota');
 
             Route::get('/pengeluaran', [BendaharaController::class, 'pengeluaran'])->name('pengeluaran.index');
             Route::post('/pengeluaran', [BendaharaController::class, 'storePengeluaran'])->name('pengeluaran.store');
@@ -95,6 +106,9 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
 
             Route::get('/backup/database', [BackupController::class, 'index'])->name('backup.database');
             Route::post('/backup/database', [BackupController::class, 'download'])->middleware('throttle:5,1')->name('backup.database.download');
+            Route::get('/backup/database/tersimpan', [BackupController::class, 'stored'])->name('backup.database.stored');
+            Route::get('/backup/database/tersimpan/{filename}', [BackupController::class, 'downloadStored'])->name('backup.database.stored.download');
+            Route::delete('/backup/database/tersimpan/{filename}', [BackupController::class, 'deleteStored'])->name('backup.database.stored.delete');
         });
     });
 
@@ -102,6 +116,10 @@ Route::middleware(['auth', 'no.cache', 'security.request', 'admin.security'])->g
         Route::get('/transaksi-pembayaran', [PembayaranTagihanController::class, 'index'])->name('pembayaran.index');
         Route::get('/transaksi-pembayaran/cetak-nota', [PembayaranTagihanController::class, 'cetakNota'])->name('pembayaran.cetak-nota');
         Route::post('/transaksi-pembayaran/bayar-semua', [PembayaranTagihanController::class, 'bayarSemuaSiswa'])->name('pembayaran.bayar-semua');
+        Route::post('/transaksi-pembayaran/bayar-custom', [PembayaranTagihanController::class, 'bayarCustomSiswa'])->name('pembayaran.bayar-custom');
         Route::post('/transaksi-pembayaran/{tagihan}', [PembayaranTagihanController::class, 'store'])->name('pembayaran.store');
+
+        Route::get('/tanggungan', [SiswaController::class, 'index'])->name('tanggungan.index');
+        Route::post('/tanggungan/bayar-semua', [SiswaController::class, 'bayarSemua'])->middleware('throttle:20,1')->name('tanggungan.bayar-semua');
     });
 });

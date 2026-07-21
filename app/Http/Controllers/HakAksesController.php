@@ -24,13 +24,15 @@ class HakAksesController extends Controller
             'role' => ['required', 'in:super_admin,admin_anggota'],
         ]);
 
-        User::create([
+        $user = User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
-            'is_super_permanent' => false,
         ]);
+
+        $user->is_super_permanent = false;
+        $user->save();
 
         return back()->with('success', 'Pengguna berhasil ditambahkan.');
     }

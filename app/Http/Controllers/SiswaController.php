@@ -9,9 +9,13 @@ use App\Models\Siswa;
 use App\Models\Tagihan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\Exception as SpreadsheetException;
 use App\Exports\SiswaExport;
+use App\Exports\SiswaDetailExport;
 
 class SiswaController extends Controller
 {
@@ -102,6 +106,26 @@ class SiswaController extends Controller
         return Excel::download(new SiswaExport($rows), $fileName);
     }
 
+    public function exportDetail(Request $request, $siswa)
+    {
+        $siswaModel = Siswa::query()
+            ->with(['tagihans' => function ($query) {
+                $query->with('itemPembayaran')
+                    ->with(['potongans:id,tagihan_id,keterangan,nominal_potongan'])
+                    ->withSum('potongans as total_potongan', 'nominal_potongan')
+                    ->withSum('pembayarans as total_pembayaran', 'nominal_bayar')
+                    ->when(Schema::hasColumn('tagihans', 'kelas'), function ($tagihanQuery) {
+                        $tagihanQuery->orderBy('kelas');
+                    })
+                    ->orderByDesc('id');
+            }])
+            ->findOrFail($siswa);
+
+        $fileName = 'Detail_Siswa_' . Str::slug($siswaModel->nama) . '_' . now()->format('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(new SiswaDetailExport($siswaModel), $fileName);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -110,7 +134,7 @@ class SiswaController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
             'kelas' => 'required|string|max:50',
             'angkatan' => 'required|string|max:20',
-            'kategori' => 'required|in:mondok,non_mondok',
+            'kategori' => 'required|in:mondok,non_mondok,alumni,non_alumni',
             'status' => 'required|in:aktif,tidak_aktif,lulus',
         ]);
 
@@ -131,7 +155,7 @@ class SiswaController extends Controller
             'jenis_kelamin' => 'required|in:L,P',
             'kelas' => 'required|string|max:50',
             'angkatan' => 'required|string|max:20',
-            'kategori' => 'required|in:mondok,non_mondok',
+            'kategori' => 'required|in:mondok,non_mondok,alumni,non_alumni',
             'status' => 'required|in:aktif,tidak_aktif,lulus',
         ]);
 
@@ -149,12 +173,16 @@ class SiswaController extends Controller
     public function import(Request $request)
     {
         $request->validate([
-            'file_excel' => 'required|file|max:5120|mimes:xlsx,xls,csv|mimetypes:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain',
+            'file_excel' => 'required|file|max:5120|mimes:xlsx,xls,csv',
         ]);
 
-        $import = new RowsImport();
-        Excel::import($import, $request->file('file_excel'));
-        $rows = $import->rows ?? collect();
+        try {
+            $import = new RowsImport();
+            Excel::import($import, $request->file('file_excel'));
+            $rows = $import->rows ?? collect();
+        } catch (SpreadsheetException | \Error $e) {
+            return back()->with('error', 'Gagal membaca file Excel. Pastikan file tidak rusak dan formatnya didukung (xlsx, xls, csv).');
+        }
 
         if ($rows->isEmpty()) {
             return back()->with('error', 'File Excel kosong atau tidak valid.');
@@ -281,7 +309,8 @@ class SiswaController extends Controller
         $validated = $request->validate([
             'siswa_id' => 'required|exists:siswas,id',
             'tanggal_bayar' => 'required|date',
-            'metode_bayar' => 'nullable|string|max:100',
+            'metode_bayar' => ['nullable', 'string', 'max:100', Rule::in(['cash', 'transfer'])],
+            'norek' => ['nullable', 'string', 'max:50'],
         ]);
 
         $siswa = Siswa::findOrFail($validated['siswa_id']);
@@ -295,7 +324,7 @@ class SiswaController extends Controller
             foreach ($tagihans as $tagihan) {
                 $potongan = (float) ($tagihan->total_potongan ?? 0);
                 $pembayaran = (float) ($tagihan->total_pembayaran ?? 0);
-                $sisa = max(0, (float) $tagihan->nominal_awal - $potongan - $pembayaran);
+                $sisa = (float) round(max(0, (float) $tagihan->nominal_awal - $potongan - $pembayaran), 2);
 
                 if ($sisa <= 0) {
                     continue;
@@ -306,15 +335,23 @@ class SiswaController extends Controller
                     'tanggal_bayar' => $validated['tanggal_bayar'],
                     'nominal_bayar' => $sisa,
                     'metode_bayar' => $validated['metode_bayar'] ?? null,
+                    'norek' => $validated['norek'] ?? null,
                     'catatan' => 'Pelunasan seluruh tanggungan siswa.',
                 ]);
 
-                $tagihan->fresh()->sinkronkanStatus();
+                // Update status langsung tanpa fresh() + sinkronkanStatus() (N+1)
+                $totalBayarBaru = round($pembayaran + $sisa, 2);
+                $sisaBaru = (float) round(max(0, (float) $tagihan->nominal_awal - $potongan - $totalBayarBaru), 2);
+                $statusBaru = $sisaBaru <= 0 ? 'lunas' : ($totalBayarBaru > 0 ? 'sebagian' : 'belum_lunas');
+
+                if ($tagihan->status !== $statusBaru) {
+                    $tagihan->update(['status' => $statusBaru]);
+                }
             }
         });
 
         return redirect()
-            ->route('pengeluaran.index')
+            ->route('tanggungan.index')
             ->with('success', 'Pembayaran seluruh tagihan siswa berhasil diproses.');
     }
 
@@ -334,6 +371,34 @@ class SiswaController extends Controller
         $siswa->delete();
 
         return back()->with('success', 'Data siswa ' . $nama . ' berhasil dihapus.');
+    }
+
+    public function destroyAll()
+    {
+        $siswas = Siswa::all();
+
+        if ($siswas->isEmpty()) {
+            return back()->with('error', 'Tidak ada data siswa untuk dihapus.');
+        }
+
+        $total = $siswas->count();
+
+        DB::transaction(function () use ($siswas) {
+            foreach ($siswas as $siswa) {
+                DeletionHistory::create([
+                    'menu' => 'Data Siswa',
+                    'entity_type' => 'Siswa',
+                    'entity_id' => $siswa->id,
+                    'label' => $siswa->nis . ' - ' . $siswa->nama,
+                    'deleted_by' => auth()->id(),
+                    'deleted_at' => now(),
+                ]);
+
+                $siswa->delete();
+            }
+        });
+
+        return back()->with('success', $total . ' data siswa berhasil dihapus semua.');
     }
 
     public function naikKelasMassal(Request $request)
@@ -435,7 +500,8 @@ class SiswaController extends Controller
         }
 
         $data['kelas'] = $this->normalisasiKelas($kelas);
-        $data['status'] = 'aktif';
+        // Pertahankan status aktif/tidak_aktif yang dipilih user, jangan dipaksa 'aktif'.
+        $data['status'] = in_array($status, ['aktif', 'tidak_aktif'], true) ? $status : 'aktif';
 
         return $data;
     }

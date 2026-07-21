@@ -28,12 +28,34 @@ class Transaksi extends Model
     protected $casts = [
         'siswa_id' => 'integer',
         'pembayaran_tagihan_id' => 'integer',
-        'tanggal' => 'date',
+        'tanggal' => 'datetime',
         'total_bayar' => 'decimal:2',
         'created_by' => 'integer',
         'updated_by' => 'integer',
         'deleted_at' => 'datetime',
     ];
+
+    /**
+     * Jika hanya tanggal (tanpa jam) yang dikirim, tempelkan jam saat ini
+     * (real time WIB, mengikuti config timezone Asia/Jakarta) agar nota
+     * dan laporan menampilkan waktu transaksi yang sebenarnya.
+     * Jika nilai yang masuk sudah membawa jam (mis. dari sinkronisasi
+     * pembayaran tagihan), jam tersebut tetap dipakai apa adanya.
+     */
+    public function setTanggalAttribute($value): void
+    {
+        if ($value instanceof \Illuminate\Support\Carbon || $value instanceof \Carbon\Carbon) {
+            $this->attributes['tanggal'] = $value;
+            return;
+        }
+
+        if (is_string($value) && str_contains($value, ':')) {
+            $this->attributes['tanggal'] = $value;
+            return;
+        }
+
+        $this->attributes['tanggal'] = \Carbon\Carbon::parse($value)->setTimeFrom(now());
+    }
 
     public function getKelasAttribute($value)
     {

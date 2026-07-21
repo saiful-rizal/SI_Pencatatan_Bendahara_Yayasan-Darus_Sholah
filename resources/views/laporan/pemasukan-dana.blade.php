@@ -40,11 +40,57 @@
         display: none;
     }
 
+    .print-summary-grid {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .print-summary-grid .box {
+        flex: 1;
+        border-radius: 6px;
+        padding: 8px 10px;
+    }
+
+    .print-summary-grid .box .label {
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        font-weight: 700;
+        display: block;
+        margin-bottom: 3px;
+    }
+
+    .print-summary-grid .box .value {
+        font-size: 13px;
+        font-weight: 800;
+    }
+
+    .print-section-title {
+        font-size: 10.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .4px;
+        margin: 16px 0 6px;
+        padding: 5px 8px;
+        border-radius: 4px;
+        page-break-after: avoid;
+        break-after: avoid;
+    }
+
     @media print {
+        @page {
+            size: A4 portrait;
+            margin: 13mm 12mm;
+        }
+
         body {
             background: #ffffff !important;
-            color: #000000 !important;
-            font-family: "Courier New", monospace !important;
+            color: #1c2b3f !important;
+            font-family: "Segoe UI", Arial, Helvetica, sans-serif !important;
+            font-size: 12px !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
         }
 
         .no-print {
@@ -56,55 +102,125 @@
         }
 
         .report-head {
-            border: none;
-            border-bottom: 2px solid #1f3657;
-            border-radius: 0;
-            padding: 0 0 10px 0;
-            margin-bottom: 14px;
+            border: 1px solid #d7e2f3;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #f3f7ff 0%, #ffffff 55%);
+            border-left: 4px solid #16a34a;
         }
 
         .report-title {
-            font-size: 13px;
-            white-space: nowrap;
+            font-size: 14px;
+            color: #17325c;
+            white-space: normal;
             letter-spacing: -0.2px;
         }
 
+        .report-meta {
+            color: #5b7091;
+        }
+
         .official-meta td {
-            font-size: 12px;
+            font-size: 11px;
             padding: 2px 4px;
             vertical-align: top;
+        }
+
+        .print-summary-grid {
+            page-break-inside: avoid;
+        }
+
+        .print-summary-grid .box:nth-child(1) {
+            background: #eaf2ff !important;
+            border-left: 3px solid #2563eb !important;
+        }
+
+        .print-summary-grid .box:nth-child(1) .label { color: #2563eb !important; }
+        .print-summary-grid .box:nth-child(1) .value { color: #17325c !important; }
+
+        .print-summary-grid .box:nth-child(2) {
+            background: #e8f7ee !important;
+            border-left: 3px solid #16a34a !important;
+        }
+
+        .print-summary-grid .box:nth-child(2) .label { color: #15803d !important; }
+        .print-summary-grid .box:nth-child(2) .value { color: #15803d !important; }
+
+        .print-summary-grid .box:nth-child(3) {
+            background: #f4f6fb !important;
+            border-left: 3px solid #5b7091 !important;
+        }
+
+        .print-summary-grid .box:nth-child(3) .label { color: #5b7091 !important; }
+        .print-summary-grid .box:nth-child(3) .value { color: #17325c !important; }
+
+        .print-section-title {
+            background: #e8f7ee !important;
+            color: #15803d !important;
+            border-left: 3px solid #16a34a !important;
+            text-align: left;
         }
 
         .table {
             width: 100% !important;
             border-collapse: collapse !important;
-            font-size: 12px;
-            color: #000 !important;
+            font-size: 10px !important;
+            color: #1c2b3f !important;
+            border: 1px solid #c7d3e6 !important;
+        }
+
+        .table thead {
+            display: table-header-group !important;
         }
 
         .table thead th {
-            border-top: 1px dashed #000 !important;
-            border-bottom: 1px dashed #000 !important;
-            background: transparent !important;
-            color: #000 !important;
-            padding: 6px 4px !important;
+            border: none !important;
+            border-bottom: 1.5px solid #16a34a !important;
+            background: #e8f7ee !important;
+            color: #15803d !important;
+            padding: 6px 5px !important;
             font-weight: 700;
+            text-transform: uppercase;
+            font-size: 9px;
+            letter-spacing: .3px;
+            text-align: center !important;
         }
 
         .table td,
         .table th {
-            border: 0 !important;
-            padding: 5px 4px !important;
+            border: none !important;
+            border-bottom: 1px solid #e6ecf5 !important;
+            padding: 5px 5px !important;
             background: transparent !important;
         }
 
-        .table tfoot th {
-            border-top: 1px dashed #000 !important;
-            border-bottom: 1px dashed #000 !important;
+        .table tbody tr:nth-child(even) td {
+            background: #f9fafc !important;
+        }
+
+        .table tbody tr,
+        .table tfoot tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+
+        .table tfoot th,
+        .table tfoot td {
+            border: none !important;
+            border-top: 1.5px solid #16a34a !important;
+            background: #e8f7ee !important;
+            padding: 6px 5px !important;
         }
 
         .table-responsive {
             overflow: visible !important;
+        }
+
+        .report-sign {
+            page-break-inside: avoid;
+            page-break-before: avoid;
+            margin-top: 24px;
         }
     }
 </style>
@@ -132,16 +248,19 @@
             </td>
             <td style="text-align:center;">
                 <div class="report-title">SMA UNGGULAN BPPT DARUS SHOLAH</div>
-                <div class="report-meta">SMA UNGGULAN BPPT DARUS SHOLAH | Laporan Pemasukan Dana</div>
-                <div class="report-meta">Periode: {{ $periode['label'] }} | Dicetak: {{ now()->format('d-m-Y H:i') }}</div>
+                <div class="report-meta">Laporan Pemasukan Dana</div>
+                <div class="report-meta">Periode: {{ $periode['label'] }} &bull; Dicetak: {{ now()->format('d-m-Y H:i') }}</div>
             </td>
         </tr>
     </table>
 </div>
 
 @php
-    $dokumenPemasukan = 'LPD-' . now()->format('Ymd') . '-' . str_pad((string) $data->count(), 3, '0', STR_PAD_LEFT);
-    $nomorSuratPemasukan = 'DS/KEU/' . now()->format('Y/m') . '/' . str_pad((string) $data->count(), 3, '0', STR_PAD_LEFT);
+    $totalTransaksi = method_exists($data, 'total') ? $data->total() : $data->count();
+    $dokumenPemasukan = 'LPD-' . now()->format('Ymd') . '-' . str_pad((string) $totalTransaksi, 3, '0', STR_PAD_LEFT);
+    $nomorSuratPemasukan = 'DS/KEU/' . now()->format('Y/m') . '/' . str_pad((string) $totalTransaksi, 3, '0', STR_PAD_LEFT);
+    $jumlahTransaksiCetak = $dataCetak->count();
+    $rataRataCetak = $jumlahTransaksiCetak > 0 ? $totalPemasukan / $jumlahTransaksiCetak : 0;
 @endphp
 
 <div class="print-only mb-3" style="font-size:12px;color:#2f4564;line-height:1.7;">
@@ -152,15 +271,23 @@
         <tr><td>Hal</td><td>:</td><td colspan="2">Laporan Pemasukan Dana</td></tr>
     </table>
     <div style="margin-bottom:8px;">Yth. Ketua SMA UNGGULAN BPPT DARUS SHOLAH<br>di Tempat</div>
-    <div style="text-align:justify;margin-bottom:8px;">Sehubungan dengan administrasi keuangan yayasan, berikut kami sampaikan laporan pemasukan dana untuk periode {{ $periode['label'] }} sebagai bahan evaluasi dan dokumentasi.</div>
-    <div><strong style="display:inline-block;min-width:180px;">Jenis Dokumen</strong>: Laporan Pemasukan Dana</div>
-    <div><strong style="display:inline-block;min-width:180px;">Nomor Dokumen</strong>: {{ $dokumenPemasukan }}</div>
-    <div><strong style="display:inline-block;min-width:180px;">Total Transaksi</strong>: {{ $data->count() }} transaksi</div>
+    <div style="text-align:justify;margin-bottom:10px;">Sehubungan dengan administrasi keuangan yayasan, berikut kami sampaikan laporan pemasukan dana untuk periode {{ $periode['label'] }} sebagai bahan evaluasi dan dokumentasi. Dokumen: {{ $dokumenPemasukan }}.</div>
+</div>
+
+<div class="print-summary-grid print-only">
+    <div class="box">
+        <span class="label">Jumlah Transaksi</span>
+        <span class="value">{{ $jumlahTransaksiCetak }} transaksi</span>
+    </div>
+    <div class="box">
+        <span class="label">Total Pemasukan</span>
+        <span class="value">Rp {{ number_format($totalPemasukan, 0, ',', '.') }}</span>
+    </div>
 </div>
 
 <div class="card mb-4 no-print">
     <div class="card-body">
-        <form method="GET" action="{{ route('laporan.pemasukan') }}" class="row g-3 align-items-end js-auto-filter">
+        <form method="GET" action="{{ route('laporan.pemasukan') }}" class="row g-3 align-items-end js-auto-filter" data-auto-submit>
             <div class="col-md-3">
                 <label class="form-label">Jenis Periode</label>
                 <select name="periode" class="form-select" id="periodePemasukan">
@@ -200,6 +327,14 @@
                 <input type="text" name="keterangan_tujuan" class="form-control" value="{{ $request->keterangan_tujuan }}" placeholder="Cari keterangan/tujuan dana">
             </div>
 
+            <div class="col-md-1">
+                <label class="form-label small">Per Hal</label>
+                <select name="per_page" class="form-select">
+                    @foreach([10, 25, 50, 100] as $size)
+                        <option value="{{ $size }}" {{ (int) request('per_page', 10) === $size ? 'selected' : '' }}>{{ $size }}</option>
+                    @endforeach
+                </select>
+            </div>
             <div class="col-md-2 d-flex gap-1 filter-actions-inline">
                 <button type="submit" class="btn btn-primary">Tampilkan</button>
                 <a href="{{ route('laporan.pemasukan') }}" class="btn btn-outline-secondary">Reset</a>
@@ -227,7 +362,7 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-sm overflow-hidden">
+<div class="card border-0 shadow-sm overflow-hidden no-print">
     <div class="card-header bg-white fw-semibold">Detail Penerimaan Dana</div>
     <div class="table-responsive">
         <table class="table mb-0 align-middle">
@@ -263,6 +398,86 @@
             </tfoot>
         </table>
     </div>
+    <div class="card-footer bg-white no-print">
+        {{ $data->links() }}
+    </div>
+</div>
+
+{{--
+    Tabel khusus cetak: memuat SEMUA transaksi pemasukan pada periode/filter
+    yang dipilih (dari $dataCetak, tidak dipaginasi) — jadi hasil PDF selalu
+    lengkap satu periode penuh, tidak dibatasi oleh pengaturan "Per Hal" yang
+    hanya untuk tampilan di layar.
+--}}
+<div class="print-only">
+    <div class="print-section-title">Rincian Penerimaan Dana</div>
+    <table class="table mb-0 align-middle">
+        <thead>
+            <tr>
+                <th style="width:24px;">No</th>
+                <th>No Transaksi</th>
+                <th>Tanggal</th>
+                <th>Sumber Dana</th>
+                <th>Pemberi Dana</th>
+                <th>Keterangan / Tujuan Dana</th>
+                <th class="text-end">Jumlah</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($dataCetak as $index => $row)
+                @php
+                    $noTransaksiCetak = 'TRX' . optional($row->tanggal)->format('ymd') . str_pad((string) $row->id, 4, '0', STR_PAD_LEFT);
+                @endphp
+                <tr>
+                    <td>{{ $index + 1 }}</td>
+                    <td>{{ $noTransaksiCetak }}</td>
+                    <td>{{ optional($row->tanggal)->format('d-m-Y') }}</td>
+                    <td>{{ $row->kategori }}</td>
+                    <td>{{ $row->nama_siswa ?: '-' }}</td>
+                    <td>{{ $row->catatan_tujuan_dana ?: '-' }}</td>
+                    <td class="text-end">Rp {{ number_format($row->total_bayar, 0, ',', '.') }}</td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="7" class="text-center py-3">Tidak ada data pemasukan pada periode ini.</td>
+                </tr>
+            @endforelse
+        </tbody>
+        @if($dataCetak->count() > 0)
+        <tfoot>
+            <tr>
+                <th colspan="6" class="text-end">TOTAL PEMASUKAN</th>
+                <th class="text-end">Rp {{ number_format($totalPemasukan, 0, ',', '.') }}</th>
+            </tr>
+        </tfoot>
+        @endif
+    </table>
+
+    @if(count($rekapItemCetak) > 0)
+        <div class="print-section-title">Ringkasan per Sumber / Item Dana</div>
+        <table class="table mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th style="width:24px;">No</th>
+                    <th>Sumber / Item Dana</th>
+                    <th class="text-end">Jumlah Transaksi</th>
+                    <th class="text-end">Total Nominal</th>
+                    <th class="text-end">% dari Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($rekapItemCetak as $item => $rekap)
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ $item }}</td>
+                        <td class="text-end">{{ $rekap['jumlah_transaksi'] }}</td>
+                        <td class="text-end">Rp {{ number_format($rekap['total'], 0, ',', '.') }}</td>
+                        <td class="text-end">{{ $totalPemasukan > 0 ? number_format($rekap['total'] / $totalPemasukan * 100, 1, ',', '.') : '0,0' }}%</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    @endif
 </div>
 
 <div class="report-sign print-only">

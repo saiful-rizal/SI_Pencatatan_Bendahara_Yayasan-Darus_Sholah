@@ -6,12 +6,25 @@
         <h4 class="fw-bold mb-1">Item Pembayaran</h4>
         <small class="text-muted">Kelola item tetap/fleksibel, kategori siswa, dan pengelola yayasan/sekolah.</small>
     </div>
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalTambahItem">+ Tambah Item</button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalTambahItem">+ Tambah Item</button>
+        <form action="{{ route('item.destroy-all') }}" method="POST" class="d-inline" id="delete-all-item">
+            @csrf
+            @method('DELETE')
+            <button type="button" class="btn btn-outline-danger btn-delete-confirm"
+                data-form-id="delete-all-item"
+                data-confirm-title="Konfirmasi Hapus Semua Item Pembayaran"
+                data-confirm-message="Anda yakin ingin menghapus SEMUA item pembayaran ({{ \App\Models\ItemPembayaran::count() }} data)? Tindakan ini tidak dapat dibatalkan."
+                data-confirm-action-text="Ya, Hapus Semua">
+                <i class="fas fa-trash me-1"></i> Hapus Semua
+            </button>
+        </form>
+    </div>
 </div>
 
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-        <form method="GET" class="row g-2 align-items-end">
+        <form method="GET" class="row g-2 align-items-end js-auto-filter" data-auto-submit>
             <div class="col-md-4"><label class="form-label small">Cari Kode / Item</label><input name="q" class="form-control" value="{{ $search ?? '' }}"></div>
             <div class="col-md-2 d-grid"><button class="btn btn-primary">Cari</button></div>
             <div class="col-md-2 d-grid"><a href="{{ route('item.index') }}" class="btn btn-outline-secondary">Reset</a></div>
@@ -87,7 +100,7 @@
                         <div class="col-md-4"><label class="form-label small">Nama Item</label><input name="nama_item" class="form-control" value="{{ old('nama_item', $item->nama_item) }}" required></div>
                         <div class="col-md-5"><label class="form-label small">Nominal</label><input name="nominal" class="form-control" data-rupiah="true" value="{{ old('nominal', number_format((float) ($item->nominal ?? 0), 0, ',', '.')) }}" required></div>
                         <div class="col-md-4"><label class="form-label small">Jenis</label><select name="jenis_item" class="form-select"><option value="tetap" {{ $item->jenis_item === 'tetap' ? 'selected' : '' }}>Tetap</option><option value="fleksibel" {{ $item->jenis_item === 'fleksibel' ? 'selected' : '' }}>Fleksibel</option></select></div>
-                        <div class="col-md-4"><label class="form-label small">Kategori Biaya</label><select name="berlaku_untuk" class="form-select"><option value="semua" {{ $item->berlaku_untuk === 'semua' ? 'selected' : '' }}>Semua</option><option value="mondok" {{ $item->berlaku_untuk === 'mondok' ? 'selected' : '' }}>Mondok</option><option value="non_mondok" {{ $item->berlaku_untuk === 'non_mondok' ? 'selected' : '' }}>Tidak Mondok</option></select></div>
+                        <div class="col-md-4"><label class="form-label small">Kategori Biaya</label><select name="berlaku_untuk" class="form-select"><option value="semua" {{ $item->berlaku_untuk === 'semua' ? 'selected' : '' }}>Semua</option><option value="mondok" {{ $item->berlaku_untuk === 'mondok' ? 'selected' : '' }}>Mondok</option><option value="non_mondok" {{ $item->berlaku_untuk === 'non_mondok' ? 'selected' : '' }}>Tidak Mondok</option><option value="alumni" {{ $item->berlaku_untuk === 'alumni' ? 'selected' : '' }}>Alumni</option><option value="non_alumni" {{ $item->berlaku_untuk === 'non_alumni' ? 'selected' : '' }}>Non Alumni</option></select></div>
                         <div class="col-md-4"><label class="form-label small">Pengelola</label><select name="pengelola" class="form-select"><option value="sekolah" {{ $item->pengelola === 'sekolah' ? 'selected' : '' }}>Sekolah</option><option value="yayasan" {{ $item->pengelola === 'yayasan' ? 'selected' : '' }}>Yayasan</option></select></div>
                         <div class="col-md-4 d-flex align-items-end">
                             <div class="form-check"><input type="hidden" name="aktif" value="0"><input class="form-check-input" type="checkbox" name="aktif" value="1" id="aktifEditItem{{ $item->id }}" {{ $item->aktif ? 'checked' : '' }}><label class="form-check-label" for="aktifEditItem{{ $item->id }}">Aktif</label></div>
@@ -117,7 +130,7 @@
                     <div class="col-md-4"><label class="form-label small">Nama Item</label><input name="nama_item" class="form-control" required></div>
                     <div class="col-md-5"><label class="form-label small">Nominal</label><input name="nominal" class="form-control" data-rupiah="true" value="{{ old('nominal') }}" required></div>
                     <div class="col-md-4"><label class="form-label small">Jenis</label><select name="jenis_item" class="form-select"><option value="tetap">Tetap</option><option value="fleksibel">Fleksibel</option></select></div>
-                    <div class="col-md-4"><label class="form-label small">Kategori Biaya</label><select name="berlaku_untuk" class="form-select"><option value="semua">Semua</option><option value="mondok">Mondok</option><option value="non_mondok">Tidak Mondok</option></select></div>
+                    <div class="col-md-4"><label class="form-label small">Kategori Biaya</label><select name="berlaku_untuk" class="form-select"><option value="semua">Semua</option><option value="mondok">Mondok</option><option value="non_mondok">Tidak Mondok</option><option value="alumni">Alumni</option><option value="non_alumni">Non Alumni</option></select></div>
                     <div class="col-md-4"><label class="form-label small">Pengelola</label><select name="pengelola" class="form-select"><option value="sekolah">Sekolah</option><option value="yayasan">Yayasan</option></select></div>
                     <div class="col-md-4 d-flex align-items-end">
                         <div class="form-check"><input type="hidden" name="aktif" value="0"><input class="form-check-input" type="checkbox" name="aktif" value="1" id="aktifItem" checked><label class="form-check-label" for="aktifItem">Aktif</label></div>

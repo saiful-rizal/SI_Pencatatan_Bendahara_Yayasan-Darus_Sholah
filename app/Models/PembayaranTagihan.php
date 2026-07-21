@@ -22,13 +22,35 @@ class PembayaranTagihan extends Model
         'tanggal_bayar',
         'nominal_bayar',
         'metode_bayar',
+        'nama_bank',
         'catatan',
     ];
 
     protected $casts = [
-        'tanggal_bayar' => 'date',
+        'tanggal_bayar' => 'datetime',
         'nominal_bayar' => 'decimal:2',
     ];
+
+    /**
+     * Jika hanya tanggal (tanpa jam) yang dikirim dari form (input type="date"),
+     * tempelkan jam saat ini (real time WIB) supaya nota pembayaran dan
+     * riwayat transaksi menampilkan waktu pembayaran yang sebenarnya,
+     * bukan selalu 00:00:00.
+     */
+    public function setTanggalBayarAttribute($value): void
+    {
+        if ($value instanceof \Illuminate\Support\Carbon || $value instanceof \Carbon\Carbon) {
+            $this->attributes['tanggal_bayar'] = $value;
+            return;
+        }
+
+        if (is_string($value) && str_contains($value, ':')) {
+            $this->attributes['tanggal_bayar'] = $value;
+            return;
+        }
+
+        $this->attributes['tanggal_bayar'] = \Carbon\Carbon::parse($value)->setTimeFrom(now());
+    }
 
     public function tagihan()
     {
@@ -76,7 +98,7 @@ class PembayaranTagihan extends Model
         $transaksi->pembayaran_tagihan_id = $this->id;
         $transaksi->nama_siswa = $siswa?->nama;
         $transaksi->kelas = $tagihan->kelas ?? $siswa?->kelas;
-        $transaksi->total_bayar = (float) $this->nominal_bayar;
+        $transaksi->total_bayar = round((float) $this->nominal_bayar, 2);
         $transaksi->tanggal = $this->tanggal_bayar;
 
         if (!$transaksi->exists) {
@@ -97,9 +119,9 @@ class PembayaranTagihan extends Model
             'transaksi_id' => $transaksi->id,
             'item_pembayaran_id' => $itemPembayaran?->id,
             'nama_item' => $labelItem,
-            'harga' => (float) $this->nominal_bayar,
+            'harga' => round((float) $this->nominal_bayar, 2),
             'jumlah' => 1,
-            'subtotal' => (float) $this->nominal_bayar,
+            'subtotal' => round((float) $this->nominal_bayar, 2),
         ]);
     }
 

@@ -13,6 +13,17 @@
         <span class="fw-semibold">Daftar Backup Transaksi</span>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-light text-dark border">{{ $transaksis->total() }} Data</span>
+            <form action="{{ route('transaksi.restore.all') }}" method="POST" class="d-inline" id="restore-transaksi-all-form">
+                @csrf
+                <button type="button" class="btn btn-sm btn-outline-primary btn-delete-confirm"
+                    data-form-id="restore-transaksi-all-form"
+                    data-confirm-title="Konfirmasi Pulihkan"
+                    data-confirm-message="Pulihkan SEMUA data transaksi di backup ini (semua halaman)?"
+                    data-confirm-action-text="Ya, Pulihkan Semua"
+                    data-confirm-action-class="btn btn-primary" {{ $transaksis->total() === 0 ? 'disabled' : '' }}>
+                    <i class="fas fa-rotate-left me-1"></i> Pulihkan Semua
+                </button>
+            </form>
             <form action="{{ route('transaksi.riwayat.purge') }}" method="POST" class="d-inline" id="purge-transaksi-form">
                 @csrf
                 <input type="hidden" name="scope" value="transaksi">
@@ -43,9 +54,14 @@
                 @forelse($transaksis as $t)
                     <tr>
                         <td>{{ optional($t->deleted_at)->format('d-m-Y H:i') }}</td>
-                        <td>{{ $t->tanggal->format('d-m-Y') }}</td>
+                        <td>{{ $t->tanggal->format('d-m-Y H:i') }}</td>
                         <td>{{ $t->nama_siswa ?? '-' }}<br><small class="text-muted">{{ $t->kelas ?? '-' }}</small></td>
-                        <td>{{ $t->kategori }}</td>
+                        <td>
+                            {{ $t->kategori }}
+                            @if(($t->item_count ?? 1) > 1)
+                                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">{{ $t->item_count }} item</span>
+                            @endif
+                        </td>
                         <td>
                             @if($t->jenis === 'Masuk')
                                 <span class="badge bg-success">Masuk</span>
@@ -83,6 +99,17 @@
         <span class="fw-semibold">Log Penghapusan Semua Menu</span>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-light text-dark border">{{ $deletionHistories->total() }} Data</span>
+            <form action="{{ route('riwayat.log.restore.all') }}" method="POST" class="d-inline" id="restore-log-all-form">
+                @csrf
+                <button type="button" class="btn btn-sm btn-outline-primary btn-delete-confirm"
+                    data-form-id="restore-log-all-form"
+                    data-confirm-title="Konfirmasi Pulihkan"
+                    data-confirm-message="Pulihkan SEMUA data di log penghapusan ini (semua halaman)?"
+                    data-confirm-action-text="Ya, Pulihkan Semua"
+                    data-confirm-action-class="btn btn-primary" {{ $deletionHistories->total() === 0 ? 'disabled' : '' }}>
+                    <i class="fas fa-rotate-left me-1"></i> Pulihkan Semua
+                </button>
+            </form>
             <form action="{{ route('transaksi.riwayat.purge') }}" method="POST" class="d-inline" id="purge-log-form">
                 @csrf
                 <input type="hidden" name="scope" value="log">
@@ -105,6 +132,7 @@
                     <th>Tipe Data</th>
                     <th>Data Dihapus</th>
                     <th>Oleh</th>
+                    <th class="text-end">Aksi</th>
                 </tr>
             </thead>
             <tbody>
@@ -115,9 +143,26 @@
                         <td>{{ $history->entity_type }}</td>
                         <td>{{ $history->label ?? '-' }}</td>
                         <td>{{ $history->user->name ?? 'Sistem' }}</td>
+                        <td class="text-end">
+                            @if(in_array($history->entity_type, ['Siswa', 'Tagihan', 'ItemPembayaran', 'Transaksi'], true))
+                                <form action="{{ route('riwayat.log.restore', $history->id) }}" method="POST" class="d-inline" id="restore-log-{{ $history->id }}">
+                                    @csrf
+                                    <button type="button" class="btn btn-sm btn-outline-primary btn-delete-confirm"
+                                        data-form-id="restore-log-{{ $history->id }}"
+                                        data-confirm-title="Konfirmasi Pulihkan"
+                                        data-confirm-message="Pulihkan data ini ke menu asalnya?"
+                                        data-confirm-action-text="Ya, Pulihkan"
+                                        data-confirm-action-class="btn btn-primary">
+                                        <i class="fas fa-rotate-left me-1"></i> Pulihkan
+                                    </button>
+                                </form>
+                            @else
+                                <span class="text-muted small">-</span>
+                            @endif
+                        </td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="text-center py-4 text-muted">Belum ada log penghapusan data.</td></tr>
+                    <tr><td colspan="6" class="text-center py-4 text-muted">Belum ada log penghapusan data.</td></tr>
                 @endforelse
             </tbody>
         </table>

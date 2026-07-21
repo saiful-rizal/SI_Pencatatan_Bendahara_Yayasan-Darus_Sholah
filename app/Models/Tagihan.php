@@ -4,10 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Tagihan extends Model
 {
-	use HasFactory;
+	use HasFactory, SoftDeletes;
 
 	protected static function booted(): void
 	{
@@ -97,22 +98,22 @@ class Tagihan extends Model
 
 	public function totalPotongan(): float
 	{
-		return (float) $this->potongans()->sum('nominal_potongan');
+		return round((float) $this->potongans()->sum('nominal_potongan'), 2);
 	}
 
 	public function totalPembayaran(): float
 	{
-		return (float) $this->pembayarans()->sum('nominal_bayar');
+		return round((float) $this->pembayarans()->sum('nominal_bayar'), 2);
 	}
 
 	public function totalAkhir(): float
 	{
-		return max(0, (float) $this->nominal_awal - $this->totalPotongan());
+		return round(max(0, (float) $this->nominal_awal - $this->totalPotongan()), 2);
 	}
 
 	public function sisaTagihan(): float
 	{
-		return max(0, $this->totalAkhir() - $this->totalPembayaran());
+		return round(max(0, $this->totalAkhir() - $this->totalPembayaran()), 2);
 	}
 
 	public function sinkronkanStatus(): void

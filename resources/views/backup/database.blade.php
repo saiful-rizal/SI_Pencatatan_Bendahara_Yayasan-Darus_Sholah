@@ -4,7 +4,12 @@
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
         <h4 class="fw-bold mb-1">Backup Database</h4>
-        <p class="text-muted mb-0">Pilih menu yang ingin dibackup, lalu tentukan format unduhannya: Excel atau JSON.</p>
+        <p class="text-muted mb-0">Pilih menu yang ingin dibackup, lalu unduh dalam format Excel.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ route('backup.database.stored') }}" class="btn btn-outline-primary">
+            <i class="fas fa-folder-open me-2"></i> Lihat Backup Tersimpan
+        </a>
     </div>
 </div>
 
@@ -15,28 +20,13 @@
                 <div class="d-flex align-items-center justify-content-between mb-3">
                     <div>
                         <h5 class="fw-semibold mb-1">Format Backup</h5>
-                        <small class="text-muted">Excel cocok untuk arsip dan review, JSON cocok untuk restore.</small>
+                        <small class="text-muted">Backup akan diunduh dalam format Excel (.xlsx), dipisahkan per sheet.</small>
                     </div>
                     <i class="fas fa-file-export fa-lg text-primary"></i>
                 </div>
 
                 <form action="{{ route('backup.database.download') }}" method="POST" id="backupForm">
                     @csrf
-
-                    <div class="mb-3">
-                        <label class="form-label small text-uppercase text-muted">Pilih Format</label>
-                        <div class="vstack gap-2">
-                            @foreach($backupFormats as $value => $label)
-                                <label class="border rounded-3 p-3 d-flex align-items-start gap-3 cursor-pointer">
-                                    <input type="radio" name="format" value="{{ $value }}" class="form-check-input mt-1" {{ $value === 'excel' ? 'checked' : '' }}>
-                                    <span>
-                                        <span class="d-block fw-semibold">{{ $label }}</span>
-                                        <small class="text-muted">{{ $value === 'excel' ? 'Hasil backup dipisahkan per sheet.' : 'Seluruh data disimpan dalam satu file JSON.' }}</small>
-                                    </span>
-                                </label>
-                            @endforeach
-                        </div>
-                    </div>
 
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary">
@@ -96,7 +86,7 @@
         </div>
 
         <div class="alert alert-info border-0 shadow-sm">
-            <strong>Catatan:</strong> backup Excel akan dibuat per sheet sesuai menu yang dipilih. Jika ingin restore data, pilih format JSON.
+            <strong>Catatan:</strong> backup Excel akan dibuat per sheet sesuai menu yang dipilih.
         </div>
     </div>
 </div>

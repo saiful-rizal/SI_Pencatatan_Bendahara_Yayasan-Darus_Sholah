@@ -767,55 +767,106 @@
             }
         }
 
-        /* Responsive Mobile */
+        /* ===== Mobile Hamburger (floating) ===== */
+        .sidebar-toggle-mobile {
+            display: none;
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 1100;
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 10px;
+            background: #fff;
+            color: var(--text-main);
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            align-items: center;
+            justify-content: center;
+            transition: all 0.25s ease;
+        }
+
+        .sidebar-toggle-mobile:hover {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(59,130,246,0.3);
+        }
+
+        @media (min-width: 993px) {
+            .sidebar-toggle-mobile,
+            .sidebar-overlay {
+                display: none !important;
+            }
+        }
+
+        /* ===== Sidebar Overlay (mobile only) ===== */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 998;
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(2px);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.show {
+            opacity: 1;
+        }
+
+        /* ===== Responsive Mobile ===== */
         @media (max-width: 992px) {
+            .sidebar-toggle-mobile {
+                display: flex;
+            }
+
             .sidebar {
-                width: 100%;
-                height: auto;
-                position: relative;
-                inset: auto;
-                flex-direction: row;
-                overflow-x: auto;
-                overflow-y: visible;
-                justify-content: flex-start;
-                border-radius: 0;
+                position: fixed;
+                top: 0;
+                left: -300px;
+                width: 280px;
+                bottom: 0;
+                height: 100vh;
+                border-radius: 0 14px 14px 0;
                 border: none;
-                box-shadow: var(--shadow-soft);
-                padding-top: 8px;
+                box-shadow: var(--shadow-lg);
+                z-index: 999;
+                transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                padding-top: 60px;
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            .sidebar-overlay.show {
+                display: block;
             }
 
             .sidebar-header {
-                padding: 12px 20px;
-                margin-bottom: 0;
-                border: none;
-                border-right: 1px solid var(--line-soft);
-                white-space: nowrap;
+                padding: 8px 20px 12px;
             }
 
             .sidebar-header h4 {
-                font-size: 0.82rem;
-                margin: 0;
-                white-space: nowrap;
+                font-size: 0.85rem;
             }
 
             .sidebar a {
-                padding: 10px 15px;
-                margin: 2px 4px;
-                white-space: nowrap;
+                padding: 10px 16px;
+                margin: 2px 6px;
                 font-size: var(--font-xs);
             }
 
             .user-profile {
-                margin-left: auto;
-                padding: 12px 20px;
-                border: none;
-                border-left: 1px solid var(--line-soft);
                 border-radius: 0;
             }
 
             .main-content {
                 margin-left: 0;
-                padding: 24px 20px;
+                padding: 60px 20px 24px;
                 max-width: 100%;
             }
 
@@ -836,7 +887,7 @@
 
         @media (max-width: 576px) {
             .main-content {
-                padding: 68px 16px 20px;
+                padding: 56px 14px 20px;
             }
 
             .main-content h2 {
@@ -867,7 +918,7 @@
 
         @media (max-width: 768px) {
             .main-content {
-                padding: 16px 12px 20px;
+                padding: 56px 12px 20px;
                 max-width: 100%;
             }
 
@@ -949,6 +1000,8 @@
 
         @media print {
             .sidebar,
+            .sidebar-toggle-mobile,
+            .sidebar-overlay,
             .no-print,
             .btn,
             .pagination,
@@ -979,6 +1032,12 @@
         }
     </style>
 <body>
+
+    <button class="sidebar-toggle-mobile no-print" id="sidebarToggleMobile" aria-label="Toggle sidebar">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <div class="sidebar-overlay no-print" id="sidebarOverlay"></div>
 
     <div class="sidebar no-print">
         <div>
@@ -1221,20 +1280,50 @@
         </div>
     </div>
 
-    <div class="modal fade" id="paymentConfirmModal" tabindex="-1" aria-labelledby="paymentConfirmModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+    <div class="modal fade payment-confirm-modal" id="paymentConfirmModal" tabindex="-1" aria-labelledby="paymentConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="paymentConfirmModalLabel">Konfirmasi Pembayaran</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="mb-0" id="paymentConfirmModalText">Lanjutkan proses pembayaran ini?</p>
+                    <p class="mb-2" id="paymentConfirmModalText">Lanjutkan proses pembayaran ini?</p>
+                    <div class="table-responsive" id="paymentConfirmItemsWrapper" style="display:none;">
+                        <table class="table table-sm table-bordered mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Item &amp; Periode</th>
+                                    <th class="text-end">Nominal</th>
+                                    <th class="text-center">Metode</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentConfirmItemsBody"></tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" id="paymentConfirmCancelBtn" data-bs-dismiss="modal">Batal</button>
                     <button type="button" class="btn btn-primary" id="paymentConfirmNoPrintBtn">Bayar</button>
                     <button type="button" class="btn btn-outline-primary" id="paymentConfirmPrintBtn">Bayar + Cetak</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="confirmActionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="confirmActionTitle">Konfirmasi</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0" id="confirmActionMessage">Yakin?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="button" class="btn btn-primary" id="confirmActionOkBtn">Ya</button>
                 </div>
             </div>
         </div>
@@ -1275,6 +1364,8 @@
             const paymentConfirmText = document.getElementById('paymentConfirmModalText');
             const paymentConfirmNoPrintBtn = document.getElementById('paymentConfirmNoPrintBtn');
             const paymentConfirmPrintBtn = document.getElementById('paymentConfirmPrintBtn');
+            const paymentConfirmItemsWrapper = document.getElementById('paymentConfirmItemsWrapper');
+            const paymentConfirmItemsBody = document.getElementById('paymentConfirmItemsBody');
             const paymentConfirmModal = paymentConfirmModalElement ? new bootstrap.Modal(paymentConfirmModalElement) : null;
             const infoAlertModalElement = document.getElementById('infoAlertModal');
             const infoAlertTitle = document.getElementById('infoAlertTitle');
@@ -1298,6 +1389,37 @@
                 infoAlertModal.show();
                 return true;
             };
+
+            const confirmActionModalElement = document.getElementById('confirmActionModal');
+            const confirmActionTitle = document.getElementById('confirmActionTitle');
+            const confirmActionMessage = document.getElementById('confirmActionMessage');
+            const confirmActionOkBtn = document.getElementById('confirmActionOkBtn');
+            const confirmActionModal = confirmActionModalElement ? new bootstrap.Modal(confirmActionModalElement) : null;
+            let confirmActionCallback = null;
+
+            window.openConfirmActionModal = function (message, title, onConfirm) {
+                if (!confirmActionModal || !confirmActionMessage) {
+                    if (typeof onConfirm === 'function' && confirm(message)) onConfirm();
+                    return;
+                }
+                confirmActionMessage.textContent = message || 'Yakin?';
+                if (confirmActionTitle) confirmActionTitle.textContent = title || 'Konfirmasi';
+                confirmActionCallback = onConfirm || null;
+                confirmActionModal.show();
+            };
+
+            if (confirmActionOkBtn) {
+                confirmActionOkBtn.addEventListener('click', function () {
+                    if (typeof confirmActionCallback === 'function') confirmActionCallback();
+                    confirmActionModal?.hide();
+                });
+            }
+
+            if (confirmActionModalElement) {
+                confirmActionModalElement.addEventListener('hidden.bs.modal', function () {
+                    confirmActionCallback = null;
+                });
+            }
 
             window.openPrintPopup = function (url) {
                 if (!printPreviewModal || !printPreviewFrame || !url) {
@@ -1341,9 +1463,42 @@
                     paymentConfirmPrintBtn.style.display = showPrintButton ? '' : 'none';
                 }
 
+                const items = options?.items || [];
+                if (paymentConfirmItemsWrapper && paymentConfirmItemsBody) {
+                    if (items.length > 0) {
+                        paymentConfirmItemsBody.innerHTML = '';
+                        let totalNominal = 0;
+                        items.forEach(function (item) {
+                            const tr = document.createElement('tr');
+                            const nominal = Number(item.nominal || 0);
+                            totalNominal += nominal;
+                            tr.innerHTML = '<td class="fw-semibold">' + escapeHtml(item.nama || '-') + '</td>' +
+                                '<td class="text-end">Rp ' + nominal.toLocaleString('id-ID') + '</td>' +
+                                '<td class="text-center">' + escapeHtml(item.metode || '-') + '</td>';
+                            paymentConfirmItemsBody.appendChild(tr);
+                        });
+                        const trTotal = document.createElement('tr');
+                        trTotal.classList.add('table-light', 'fw-bold');
+                        trTotal.innerHTML = '<td class="text-end">Total</td>' +
+                            '<td class="text-end">Rp ' + totalNominal.toLocaleString('id-ID') + '</td>' +
+                            '<td></td>';
+                        paymentConfirmItemsBody.appendChild(trTotal);
+                        paymentConfirmItemsWrapper.style.display = '';
+                    } else {
+                        paymentConfirmItemsWrapper.style.display = 'none';
+                        paymentConfirmItemsBody.innerHTML = '';
+                    }
+                }
+
                 paymentConfirmModal.show();
                 return true;
             };
+
+            function escapeHtml(str) {
+                var div = document.createElement('div');
+                div.textContent = str;
+                return div.innerHTML;
+            }
 
             if (paymentConfirmNoPrintBtn) {
                 paymentConfirmNoPrintBtn.addEventListener('click', function () {
@@ -1379,6 +1534,72 @@
                 });
             }
 
+            // ===== Sidebar Toggle (Mobile only) =====
+            var sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
+            var sidebarOverlay = document.getElementById('sidebarOverlay');
+            var sidebar = document.querySelector('.sidebar');
+
+            function toggleMobile(open) {
+                if (!sidebar) return;
+                var isOpen = open !== undefined ? open : !sidebar.classList.contains('open');
+                sidebar.classList.toggle('open', isOpen);
+                if (sidebarOverlay) {
+                    sidebarOverlay.classList.toggle('show', isOpen);
+                }
+                document.body.style.overflow = isOpen ? 'hidden' : '';
+                var icon = sidebarToggleMobile?.querySelector('i');
+                if (icon) {
+                    icon.className = isOpen ? 'fas fa-times' : 'fas fa-bars';
+                }
+            }
+
+            if (sidebarToggleMobile) {
+                sidebarToggleMobile.addEventListener('click', function () { toggleMobile(); });
+            }
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', function () { toggleMobile(false); });
+            }
+
+            // Close sidebar when clicking a nav link (mobile)
+            if (sidebar) {
+                sidebar.querySelectorAll('a').forEach(function (link) {
+                    link.addEventListener('click', function () {
+                        if (window.innerWidth <= 992) {
+                            toggleMobile(false);
+                        }
+                    });
+                });
+            }
+
+            // Reset on resize to desktop
+            window.addEventListener('resize', function () {
+                if (window.innerWidth > 992) {
+                    sidebar?.classList.remove('open');
+                    if (sidebarOverlay) {
+                        sidebarOverlay.classList.remove('show');
+                    }
+                    document.body.style.overflow = '';
+                    var icon = sidebarToggleMobile?.querySelector('i');
+                    if (icon) {
+                        icon.className = 'fas fa-bars';
+                    }
+                }
+            });
+
+            // Hover to temporarily reveal sidebar on desktop when collapsed
+            if (sidebar) {
+                sidebar.addEventListener('mouseenter', function () {
+                    if (!isMobile() && sidebar.classList.contains('collapsed')) {
+                        sidebar.classList.remove('no-hover');
+                    }
+                });
+                sidebar.addEventListener('mouseleave', function () {
+                    if (!isMobile() && sidebar.classList.contains('collapsed')) {
+                        sidebar.classList.add('no-hover');
+                    }
+                });
+            }
+
             const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
             if (!prefersReducedMotion) {
@@ -1406,6 +1627,64 @@
                 }, { threshold: 0.1 });
 
                 revealTargets.forEach((element) => revealObserver.observe(element));
+            }
+
+            function initTablePaginator() {
+                document.querySelectorAll('table[data-paginate]').forEach(function (table) {
+                    const tbody = table.querySelector('tbody');
+                    if (!tbody) return;
+                    const rows = Array.from(tbody.querySelectorAll('tr'));
+                    const perPage = parseInt(table.getAttribute('data-page-size')) || 5;
+                    if (rows.length <= perPage) return;
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'd-flex justify-content-between align-items-center mt-2 px-2';
+
+                    const info = document.createElement('small');
+                    info.className = 'text-muted';
+
+                    const nav = document.createElement('div');
+                    nav.className = 'btn-group btn-group-sm';
+
+                    const prevBtn = document.createElement('button');
+                    prevBtn.className = 'btn btn-outline-secondary';
+                    prevBtn.textContent = '\u00ab Sebelumnya';
+                    prevBtn.type = 'button';
+
+                    const nextBtn = document.createElement('button');
+                    nextBtn.className = 'btn btn-outline-secondary';
+                    nextBtn.textContent = 'Selanjutnya \u00bb';
+                    nextBtn.type = 'button';
+
+                    nav.appendChild(prevBtn);
+                    nav.appendChild(nextBtn);
+                    wrapper.appendChild(info);
+                    wrapper.appendChild(nav);
+
+                    table.parentNode.appendChild(wrapper);
+
+                    let currentPage = 1;
+                    const totalPages = Math.ceil(rows.length / perPage);
+
+                    function showPage(page) {
+                        currentPage = page;
+                        rows.forEach(function (row, index) {
+                            row.style.display = (index >= (page - 1) * perPage && index < page * perPage) ? '' : 'none';
+                        });
+                        prevBtn.disabled = page === 1;
+                        nextBtn.disabled = page === totalPages;
+                        info.textContent = 'Halaman ' + page + ' dari ' + totalPages + ' (total ' + rows.length + ' data)';
+                    }
+
+                    prevBtn.addEventListener('click', function () {
+                        if (currentPage > 1) showPage(currentPage - 1);
+                    });
+                    nextBtn.addEventListener('click', function () {
+                        if (currentPage < totalPages) showPage(currentPage + 1);
+                    });
+
+                    showPage(1);
+                });
             }
 
             const rupiahInputs = document.querySelectorAll('input[data-rupiah="true"]');
@@ -1527,6 +1806,8 @@
                     }
                 });
             }
+
+            initTablePaginator();
 
             document.querySelectorAll('form.js-auto-filter').forEach((form) => {
                 const hasSubmitButton = !!form.querySelector('button[type="submit"], input[type="submit"]');

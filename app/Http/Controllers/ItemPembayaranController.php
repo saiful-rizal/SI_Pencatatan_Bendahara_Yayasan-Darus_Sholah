@@ -47,13 +47,14 @@ class ItemPembayaranController extends Controller
             'nama_item' => 'required|string|max:255',
             'nominal' => 'required|numeric|min:0',
             'jenis_item' => 'required|in:tetap,fleksibel',
-            'berlaku_untuk' => 'required|in:mondok,non_mondok,semua',
+            'berlaku_untuk' => 'required|in:mondok,non_mondok,alumni,non_alumni,semua',
             'pengelola' => 'required|in:yayasan,sekolah',
             'aktif' => 'nullable|boolean',
         ]);
 
         $validated['kode'] = $kode;
         $validated['aktif'] = (bool) ($validated['aktif'] ?? false);
+        $validated['nominal'] = round((float) ($validated['nominal'] ?? 0), 2);
 
         ItemPembayaran::create($validated);
 
@@ -66,12 +67,13 @@ class ItemPembayaranController extends Controller
             'nama_item' => 'required|string|max:255',
             'nominal' => 'required|numeric|min:0',
             'jenis_item' => 'required|in:tetap,fleksibel',
-            'berlaku_untuk' => 'required|in:mondok,non_mondok,semua',
+            'berlaku_untuk' => 'required|in:mondok,non_mondok,alumni,non_alumni,semua',
             'pengelola' => 'required|in:yayasan,sekolah',
             'aktif' => 'nullable|boolean',
         ]);
 
         $validated['aktif'] = (bool) ($validated['aktif'] ?? false);
+        $validated['nominal'] = round((float) ($validated['nominal'] ?? 0), 2);
 
         $item->update($validated);
 
@@ -104,6 +106,32 @@ class ItemPembayaranController extends Controller
         $item->delete();
 
         return back()->with('success', 'Item pembayaran ' . $namaItem . ' berhasil dihapus.');
+    }
+
+    public function destroyAll()
+    {
+        $items = ItemPembayaran::all();
+
+        if ($items->isEmpty()) {
+            return back()->with('error', 'Tidak ada data item pembayaran untuk dihapus.');
+        }
+
+        $total = $items->count();
+
+        foreach ($items as $item) {
+            DeletionHistory::create([
+                'menu' => 'Item Pembayaran',
+                'entity_type' => 'ItemPembayaran',
+                'entity_id' => $item->id,
+                'label' => $item->kode . ' - ' . $item->nama_item,
+                'deleted_by' => auth()->id(),
+                'deleted_at' => now(),
+            ]);
+
+            $item->delete();
+        }
+
+        return back()->with('success', $total . ' item pembayaran berhasil dihapus semua.');
     }
 
     private function generateKodeItem(): string

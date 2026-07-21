@@ -61,6 +61,7 @@
         margin-top: 56px;
         border-top: 1px solid #9fb0c8;
         padding-top: 6px;
+        font-weight: 700;
     }
 
     .print-only {
@@ -93,17 +94,61 @@
             overflow: visible !important;
         }
 
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        .card-header {
+            background: #1f3657 !important;
+            color: #fff !important;
+            text-align: center !important;
+            font-size: 12px;
+            padding: 6px 4px !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
         .wali-table {
             width: 100% !important;
             table-layout: fixed;
+            border-collapse: collapse !important;
         }
 
         .wali-table th,
         .wali-table td {
             white-space: normal !important;
             word-break: break-word;
-            font-size: 11px;
+            font-size: 10.5px;
             padding: 4px 6px;
+            border: 1px solid #a9b7cc !important;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .wali-table thead th {
+            background: #eaf2ff !important;
+            color: #1f3657 !important;
+            font-weight: 700;
+            text-align: center !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .wali-table td:nth-child(3),
+        .wali-table td:nth-child(5) {
+            text-align: left;
+        }
+
+        .wali-table td.text-end {
+            text-align: right !important;
+        }
+
+        .wali-table tfoot td {
+            background: #f4f7fc !important;
+            font-weight: 700;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         .official-meta td {
@@ -120,7 +165,7 @@
                 <small class="text-muted">Data diambil dari transaksi pembayaran tagihan siswa dan dipisah per kelas tagihan (10, 11, 12).</small>
     </div>
     <div class="d-flex gap-2">
-        <a href="{{ route('laporan.wali.export', request()->query()) }}" class="btn btn-success">
+        <a href="{{ route('laporan.wali.export', request()->query()) }}" id="btn-export-wali" class="btn btn-success">
             <i class="fas fa-file-excel me-2"></i>Export Excel
         </a>
         @if($data->count() > 0)
@@ -147,10 +192,10 @@
 </div>
 
 <div class="card border-0 shadow-sm p-3 mb-4 no-print">
-    <form method="GET" action="{{ route('laporan.wali') }}" class="row g-3">
+    <form method="GET" action="{{ route('laporan.wali') }}" class="row g-3" id="form-laporan-wali">
         <div class="col-md-4">
             <label class="form-label">Nama Siswa</label>
-            <input type="text" name="nama_siswa" class="form-control" placeholder="Contoh: Ahmad" value="{{ $request->nama_siswa }}">
+            <input type="text" name="nama_siswa" id="input-nama-siswa" class="form-control" placeholder="Ketik minimal 2 huruf, hasil muncul otomatis" value="{{ $request->nama_siswa }}" autocomplete="off">
         </div>
         <div class="col-md-2">
             <label class="form-label">Kelas</label>
@@ -188,7 +233,8 @@
     $isSearchRequested = $request->has('cari') || $request->hasAny(['nama_siswa', 'kelas', 'tanggal_mulai', 'tanggal_selesai']);
 @endphp
 
-@if($isSearchRequested && $data->count() > 0)
+<div id="wali-report-results">
+@if($data->count() > 0)
     @php
         $totalPembayaranNominal = isset($totalPembayaran) ? (float) $totalPembayaran : (float) $data->sum('nominal_bayar');
         $totalKelas10 = 0;
@@ -355,17 +401,107 @@
         <div>Mengetahui,</div>
         <div class="sign-line">Bendahara</div>
     </div>
-@elseif($isSearchRequested)
+@else
     <div class="alert alert-warning">
         Data pembayaran tidak ditemukan pada filter yang dipilih.
     </div>
-@else
-    <div class="text-center py-5 text-muted">
-        Masukkan filter untuk menampilkan laporan pembayaran wali murid.
-    </div>
 @endif
+</div>
 
 <script>
+    (function () {
+        const form = document.getElementById('form-laporan-wali');
+        const inputNama = document.getElementById('input-nama-siswa');
+        const resultBox = document.getElementById('wali-report-results');
+        if (!form || !inputNama || !resultBox) return;
+
+        let debounceTimer = null;
+        let lastRequestId = 0;
+
+        function showLoading() {
+            resultBox.style.opacity = '0.5';
+            resultBox.style.pointerEvents = 'none';
+        }
+
+        function hideLoading() {
+            resultBox.style.opacity = '1';
+            resultBox.style.pointerEvents = 'auto';
+        }
+
+        async function runSearch(pushUrl) {
+            const params = new URLSearchParams(new FormData(form));
+            // Tandai sebagai pencarian otomatis (setara klik tombol Cari)
+            params.set('cari', '1');
+
+            const url = form.getAttribute('action') + '?' + params.toString();
+            const requestId = ++lastRequestId;
+
+            showLoading();
+            try {
+                const response = await fetch(url, {
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                if (!response.ok) throw new Error('Gagal memuat data');
+                const html = await response.text();
+
+                // Abaikan hasil jika sudah ada request yang lebih baru menyusul
+                if (requestId !== lastRequestId) return;
+
+                const exportBtn = document.getElementById('btn-export-wali');
+                if (exportBtn) {
+                    const exportUrl = new URL(exportBtn.href, window.location.origin);
+                    exportUrl.search = params.toString();
+                    exportBtn.href = exportUrl.toString();
+                }
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newResult = doc.getElementById('wali-report-results');
+
+                if (newResult) {
+                    resultBox.innerHTML = newResult.innerHTML;
+                }
+
+                if (pushUrl && window.history && window.history.pushState) {
+                    window.history.pushState({}, '', url);
+                }
+            } catch (err) {
+                console.error('Live search wali murid gagal:', err);
+            } finally {
+                if (requestId === lastRequestId) hideLoading();
+            }
+        }
+
+        inputNama.addEventListener('input', function () {
+            clearTimeout(debounceTimer);
+            const val = inputNama.value.trim();
+
+            // Cari otomatis begitu user mengetik minimal 2 huruf.
+            // Jika dikosongkan lagi, tampilkan ulang sesuai filter lain yang ada.
+            if (val.length === 1) return;
+
+            debounceTimer = setTimeout(function () {
+                runSearch(true);
+            }, 400);
+        });
+
+        // Filter lain (kelas, tanggal, per halaman) tetap langsung mencari otomatis juga,
+        // tanpa perlu klik tombol Cari.
+        form.querySelectorAll('select[name="kelas"], input[name="tanggal_mulai"], input[name="tanggal_selesai"], select[name="per_page"]').forEach(function (el) {
+            el.addEventListener('change', function () {
+                runSearch(true);
+            });
+        });
+
+        // Submit manual (tombol Cari / tekan Enter) tetap berfungsi seperti biasa,
+        // tapi diarahkan lewat AJAX juga supaya konsisten & tidak reload halaman.
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            clearTimeout(debounceTimer);
+            runSearch(true);
+        });
+    })();
+
     function printLaporanWali() {
         const originalTitle = document.title;
         const tanggal = new Date().toISOString().slice(0, 10).replace(/-/g, '');

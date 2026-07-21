@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Keep direct access to existing files/folders at project root.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Internally route all other requests through /public.
+    RewriteRule ^(.*)$ public/$1 [L]
+
+</IfModule>

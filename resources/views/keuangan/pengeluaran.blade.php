@@ -11,7 +11,7 @@
 
 <div class="card border-0 shadow-sm mb-3 no-print">
     <div class="card-body">
-        <form method="GET" action="{{ route('pengeluaran.index') }}" class="row g-2 align-items-end js-auto-filter">
+        <form method="GET" action="{{ route('pengeluaran.index') }}" class="row g-2 align-items-end js-auto-filter" data-auto-submit>
             <div class="col-md-4">
                 <label class="form-label small">Cari Penerima / Catatan</label>
                 <input type="text" name="q" class="form-control" value="{{ $request->q }}" placeholder="Contoh: toko, vendor, listrik">

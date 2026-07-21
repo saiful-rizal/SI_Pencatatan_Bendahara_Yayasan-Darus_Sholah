@@ -6,6 +6,7 @@ use App\Exports\BackupDatabaseExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
 class BackupController extends Controller
@@ -14,18 +15,82 @@ class BackupController extends Controller
     {
         return view('backup.database', [
             'backupGroups' => $this->backupGroups(),
-            'backupFormats' => [
-                'excel' => 'Excel (.xlsx)',
-                'json' => 'JSON (.json)',
-            ],
             'backupTables' => $this->backupTables(),
+            'storedBackups' => $this->getStoredBackups(),
         ]);
+    }
+
+    public function stored()
+    {
+        return view('backup.stored', [
+            'backups' => $this->getStoredBackups(),
+        ]);
+    }
+
+    public function downloadStored(string $filename)
+    {
+        $path = 'backup/' . $filename;
+
+        if (!Storage::exists($path)) {
+            return back()->with('error', 'File backup tidak ditemukan.');
+        }
+
+        return Storage::download($path);
+    }
+
+    public function deleteStored(string $filename)
+    {
+        $path = 'backup/' . $filename;
+
+        if (!Storage::exists($path)) {
+            return back()->with('error', 'File backup tidak ditemukan.');
+        }
+
+        Storage::delete($path);
+
+        return back()->with('success', 'Backup ' . $filename . ' berhasil dihapus.');
+    }
+
+    private function getStoredBackups(): array
+    {
+        if (!Storage::exists('backup')) {
+            return [];
+        }
+
+        $files = Storage::files('backup');
+
+        $backups = [];
+        foreach ($files as $file) {
+            $filename = basename($file);
+            $backups[] = [
+                'filename' => $filename,
+                'size' => Storage::size($file),
+                'size_formatted' => $this->formatBytes(Storage::size($file)),
+                'last_modified' => Storage::lastModified($file),
+                'last_modified_formatted' => date('Y-m-d H:i:s', Storage::lastModified($file)),
+                'type' => 'Excel',
+            ];
+        }
+
+        usort($backups, fn ($a, $b) => $b['last_modified'] - $a['last_modified']);
+
+        return $backups;
+    }
+
+    private function formatBytes(int $bytes): string
+    {
+        $units = ['B', 'KB', 'MB', 'GB'];
+        $i = 0;
+        while ($bytes >= 1024 && $i < count($units) - 1) {
+            $bytes /= 1024;
+            $i++;
+        }
+        return round($bytes, 2) . ' ' . $units[$i];
     }
 
     public function download(Request $request)
     {
         $validated = $request->validate([
-            'format' => ['required', 'in:excel,json'],
             'tables' => ['nullable', 'array'],
             'tables.*' => ['string'],
         ]);
@@ -43,13 +108,7 @@ class BackupController extends Controller
         $backupData = $this->buildBackupPayload($selectedTables);
         $timestamp = now()->format('Ymd_His');
 
-        if ($validated['format'] === 'excel') {
-            return Excel::download(new BackupDatabaseExport($backupData), 'backup_keuangan_' . $timestamp . '.xlsx');
-        }
-
-        return response()->streamDownload(function () use ($backupData) {
-            echo json_encode($backupData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        }, 'backup_keuangan_' . $timestamp . '.json', ['Content-Type' => 'application/json']);
+        return Excel::download(new BackupDatabaseExport($backupData), 'backup_keuangan_' . $timestamp . '.xlsx');
     }
 
     private function buildBackupPayload(array $selectedTables): array
@@ -71,16 +130,18 @@ class BackupController extends Controller
             $payload['tables'][$table] = [
                 'label' => $backupTables[$table]['label'] ?? $table,
                 'columns' => $columns,
-                'rows' => $this->fetchTableRows($table, $columns),
+                'rows' => $this->fetchTableRows($table),
             ];
         }
 
         return $payload;
     }
 
-    private function fetchTableRows(string $table, array $columns): array
+    private function fetchTableRows(string $table): array
     {
-        $query = DB::table($table);
+        $query = DB::table($table)->select('*');
+
+        $columns = Schema::getColumnListing($table);
 
         if (in_array('id', $columns, true)) {
             $query->orderBy('id');
@@ -89,7 +150,7 @@ class BackupController extends Controller
         }
 
         return $query->get()->map(function ($row) {
-            return (array) $row;
+            return json_decode(json_encode($row), true);
         })->all();
     }
 

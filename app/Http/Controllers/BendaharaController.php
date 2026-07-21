@@ -29,7 +29,24 @@ class BendaharaController extends Controller
         $totalKeluar = Transaksi::where('jenis', 'Keluar')->sum('total_bayar');
         $saldo = $totalMasuk - $totalKeluar;
 
-        $transaksis = Transaksi::latest()->paginate(10);
+        // Riwayat Transaksi (tabel di Dashboard): item-item pembayaran tagihan yang
+        // dibayar bersamaan (siswa & waktu bayar sama persis) disimpan sebagai
+        // beberapa baris Transaksi terpisah (lihat PembayaranTagihan::sinkronkanTransaksi).
+        // Supaya tampil sebagai 1 baris saja (selaras dengan nota yang sudah digabung),
+        // baris-baris tersebut digabung di sini menggunakan GROUP BY.
+        $groupKeyExpr = "CASE WHEN jenis = 'Masuk' AND pembayaran_tagihan_id IS NOT NULL AND siswa_id IS NOT NULL "
+            . "THEN CONCAT('grp-', siswa_id, '-', tanggal) ELSE CONCAT('id-', id) END";
+
+        $transaksis = Transaksi::query()
+            ->selectRaw(
+                'MIN(id) as id, MIN(jenis) as jenis, MIN(kategori) as kategori, MIN(siswa_id) as siswa_id, '
+                . 'MIN(nama_siswa) as nama_siswa, MIN(kelas) as kelas, MIN(tanggal) as tanggal, '
+                . 'SUM(total_bayar) as total_bayar, MAX(created_at) as created_at, COUNT(*) as item_count'
+            )
+            ->groupByRaw($groupKeyExpr)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->paginate(10);
 
         $months = [];
         $dataMasukChart = [];
@@ -58,16 +75,24 @@ class BendaharaController extends Controller
             ->whereYear('tanggal', now()->year)
             ->sum('total_bayar');
 
-        // Rekap harian: ambil 1 transaksi terbaru per nama_siswa untuk hari ini.
-        // Jika nama_siswa null, dikelompokkan sebagai transaksi umum.
-        $recentTransactionIds = Transaksi::query()
-            ->whereDate('tanggal', today())
-            ->selectRaw('MAX(id) as id')
-            ->groupBy(DB::raw("COALESCE(nama_siswa, '__UMUM__')"))
-            ->pluck('id');
+        // Rekap harian untuk widget "Transaksi Terkini": gabungkan item-item
+        // pembayaran tagihan siswa yang dibayar bersamaan (siswa & waktu bayar sama
+        // persis) jadi 1 baris — sama seperti tabel "Riwayat Transaksi" di bawah.
+        // Transaksi Keluar (pengeluaran) TIDAK ikut digabung berdasarkan nama,
+        // karena nama di sana adalah nama penerima/pihak dibayar, bukan siswa —
+        // dua pengeluaran berbeda yang kebetulan penerimanya sama tetap harus
+        // tampil sebagai 2 baris terpisah.
+        $recentGroupKeyExpr = "CASE WHEN jenis = 'Masuk' AND pembayaran_tagihan_id IS NOT NULL AND siswa_id IS NOT NULL "
+            . "THEN CONCAT('grp-', siswa_id, '-', tanggal) ELSE CONCAT('id-', id) END";
 
         $recentTransactions = Transaksi::query()
-            ->whereIn('id', $recentTransactionIds)
+            ->whereDate('tanggal', today())
+            ->selectRaw(
+                'MIN(id) as id, MIN(jenis) as jenis, MIN(kategori) as kategori, '
+                . 'MIN(nama_siswa) as nama_siswa, MIN(kelas) as kelas, MIN(tanggal) as tanggal, '
+                . 'SUM(total_bayar) as total_bayar, COUNT(*) as item_count'
+            )
+            ->groupByRaw($recentGroupKeyExpr)
             ->orderByDesc('tanggal')
             ->orderByDesc('id')
             ->take(5)
@@ -144,8 +169,9 @@ class BendaharaController extends Controller
             $siswa = $this->resolveSiswaByNama($validated['nama_siswa'] ?? null, null);
 
             foreach ($validated['harga'] as $key => $harga) {
-                $totalBayar += ($harga * $validated['jumlah'][$key]);
+                $totalBayar += round((float) $harga * (int) $validated['jumlah'][$key], 2);
             }
+            $totalBayar = round($totalBayar, 2);
 
             $transaksi = Transaksi::create([
                 'jenis' => 'Keluar',
@@ -162,13 +188,15 @@ class BendaharaController extends Controller
 
             foreach ($validated['nama_item'] as $key => $nama) {
                 if (!empty($nama)) {
+                    $harga = round((float) $validated['harga'][$key], 2);
+                    $jumlah = (int) $validated['jumlah'][$key];
                     DetailTransaksi::create([
                         'transaksi_id' => $transaksi->id,
                         'item_pembayaran_id' => $this->resolveItemPembayaranIdByNama($nama),
                         'nama_item' => $nama,
-                        'harga' => $validated['harga'][$key],
-                        'jumlah' => $validated['jumlah'][$key],
-                        'subtotal' => $validated['harga'][$key] * $validated['jumlah'][$key],
+                        'harga' => $harga,
+                        'jumlah' => $jumlah,
+                        'subtotal' => round($harga * $jumlah, 2),
                     ]);
                 }
             }
@@ -203,8 +231,9 @@ class BendaharaController extends Controller
             $kelasTransaksi = $kelasNormalized ?? $siswa?->kelas;
 
             foreach ($validated['harga'] as $key => $harga) {
-                $totalBayar += ($harga * $validated['jumlah'][$key]);
+                $totalBayar += round((float) $harga * (int) $validated['jumlah'][$key], 2);
             }
+            $totalBayar = round($totalBayar, 2);
 
             $transaksi = Transaksi::create([
                 'jenis' => $validated['jenis'],
@@ -221,13 +250,15 @@ class BendaharaController extends Controller
 
             foreach ($validated['nama_item'] as $key => $nama) {
                 if (!empty($nama)) {
+                    $harga = round((float) $validated['harga'][$key], 2);
+                    $jumlah = (int) $validated['jumlah'][$key];
                     DetailTransaksi::create([
                         'transaksi_id' => $transaksi->id,
                         'item_pembayaran_id' => $this->resolveItemPembayaranIdByNama($nama),
                         'nama_item' => $nama,
-                        'harga' => $validated['harga'][$key],
-                        'jumlah' => $validated['jumlah'][$key],
-                        'subtotal' => $validated['harga'][$key] * $validated['jumlah'][$key],
+                        'harga' => $harga,
+                        'jumlah' => $jumlah,
+                        'subtotal' => round($harga * $jumlah, 2),
                     ]);
                 }
             }
@@ -314,22 +345,6 @@ class BendaharaController extends Controller
 
         $perPage = (int) $request->input('per_page', 25);
         $hasTagihanKelasColumn = Schema::hasColumn('tagihans', 'kelas');
-        $isSearchRequested = $request->has('cari')
-            || $request->filled('nama_siswa')
-            || $request->filled('kelas')
-            || $request->filled('tanggal_mulai')
-            || $request->filled('tanggal_selesai');
-
-        if (!$isSearchRequested) {
-            $data = PembayaranTagihan::query()
-                ->whereRaw('1 = 0')
-                ->paginate($perPage)
-                ->appends($request->query());
-
-            $totalPembayaran = 0;
-
-            return view('laporan.wali', compact('data', 'request', 'totalPembayaran'));
-        }
 
         $query = PembayaranTagihan::query()
             ->with(['tagihan.itemPembayaran', 'tagihan.siswa'])
@@ -499,17 +514,24 @@ class BendaharaController extends Controller
     // 2A. Laporan Pemasukan Dana
     public function laporanPemasukanDana(Request $request)
     {
+        $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
+            'keterangan_tujuan' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $perPage = (int) $request->input('per_page', 10);
         $periode = $this->resolvePeriode($request);
 
-        $data = Transaksi::query()
+        $query = Transaksi::query()
             ->with([
                 'details:id,transaksi_id,nama_item',
-                'pembayaranTagihan:id,tagihan_id',
+                'siswa:id,nis',
+                'pembayaranTagihan:id,tagihan_id,metode_bayar,nama_bank',
                 'pembayaranTagihan.tagihan:id,item_pembayaran_id,periode_bulan,periode_tahun',
                 'pembayaranTagihan.tagihan.itemPembayaran:id,nama_item',
             ])
             ->where('jenis', 'Masuk')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->when($request->filled('keterangan_tujuan'), function ($query) use ($request) {
                 $keyword = trim((string) $request->keterangan_tujuan);
                 $query->where(function ($subQuery) use ($keyword) {
@@ -525,12 +547,35 @@ class BendaharaController extends Controller
                 });
             })
             ->orderBy('tanggal', 'desc')
-            ->get();
+            ->orderBy('id', 'desc');
 
-        $totalPemasukan = $data->sum('total_bayar');
+        $totalPemasukan = (clone $query)->sum('total_bayar');
+        $data = $query->paginate($perPage)->appends($request->query());
+
+        // Data lengkap (tidak dipaginasi) khusus untuk bagian cetak/print,
+        // supaya hasil cetak selalu memuat SEMUA transaksi pada periode/filter
+        // terkait, bukan cuma satu halaman yang sedang ditampilkan di layar.
+        $dataCetak = (clone $query)->get();
+
+        $rekapItemCetak = [];
+        foreach ($dataCetak as $row) {
+            $itemPembayaran = $row->details->pluck('nama_item')->filter()->unique()->implode(', ');
+            if ($itemPembayaran === '') {
+                $itemPembayaran = optional(optional($row->pembayaranTagihan)->tagihan)->itemPembayaran->nama_item ?? ($row->kategori ?: '-');
+            }
+
+            if (!isset($rekapItemCetak[$itemPembayaran])) {
+                $rekapItemCetak[$itemPembayaran] = ['jumlah_transaksi' => 0, 'total' => 0.0];
+            }
+            $rekapItemCetak[$itemPembayaran]['jumlah_transaksi']++;
+            $rekapItemCetak[$itemPembayaran]['total'] += (float) $row->total_bayar;
+        }
+        arsort($rekapItemCetak);
 
         return view('laporan.pemasukan-dana', [
             'data' => $data,
+            'dataCetak' => $dataCetak,
+            'rekapItemCetak' => $rekapItemCetak,
             'totalPemasukan' => $totalPemasukan,
             'periode' => $periode,
             'request' => $request,
@@ -544,12 +589,13 @@ class BendaharaController extends Controller
         $data = Transaksi::query()
             ->with([
                 'details:id,transaksi_id,nama_item',
-                'pembayaranTagihan:id,tagihan_id',
+                'siswa:id,nis',
+                'pembayaranTagihan:id,tagihan_id,metode_bayar,nama_bank',
                 'pembayaranTagihan.tagihan:id,item_pembayaran_id,periode_bulan,periode_tahun',
                 'pembayaranTagihan.tagihan.itemPembayaran:id,nama_item',
             ])
             ->where('jenis', 'Masuk')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->when($request->filled('keterangan_tujuan'), function ($query) use ($request) {
                 $keyword = trim((string) $request->keterangan_tujuan);
                 $query->where(function ($subQuery) use ($keyword) {
@@ -565,32 +611,119 @@ class BendaharaController extends Controller
                 });
             })
             ->orderBy('tanggal', 'desc')
+            ->orderBy('id', 'desc')
             ->get();
 
         $fileName = 'Laporan_Pemasukan_Dana_' . now()->format('Y-m-d_His') . '.xlsx';
 
-        return Excel::download(new PemasukanDanaExport($data, $periode['label']), $fileName);
+        return Excel::download(new PemasukanDanaExport($data, $periode['label'], $request->filled('keterangan_tujuan') ? trim((string) $request->keterangan_tujuan) : null), $fileName);
     }
 
     // 2B. Laporan Pengeluaran Dana
     public function laporanPengeluaranDana(Request $request)
     {
+        $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:10', 'max:100'],
+        ]);
+
+        $perPage = (int) $request->input('per_page', 10);
         $periode = $this->resolvePeriode($request);
 
-        $data = Transaksi::query()
+        $query = Transaksi::query()
+            ->with('details')
             ->where('jenis', 'Keluar')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->orderBy('tanggal', 'desc')
-            ->get();
+            ->orderBy('id', 'desc');
 
-        $totalPengeluaran = $data->sum('total_bayar');
+        $totalPengeluaran = (clone $query)->sum('total_bayar');
+        $data = $query->paginate($perPage)->appends($request->query());
+
+        // Data lengkap (tidak dipaginasi) khusus untuk bagian cetak/print,
+        // supaya hasil cetak selalu memuat SEMUA transaksi pada periode yang
+        // dipilih, bukan cuma satu halaman yang sedang ditampilkan di layar.
+        $dataCetak = (clone $query)->get();
+
+        // Pecah setiap transaksi menjadi satu baris per ITEM (nama item, jumlah x
+        // harga, subtotal per item) - bukan cuma satu baris ringkas per transaksi -
+        // supaya hasil cetak PDF sedetail file Export Excel.
+        $dataCetakDetail = $this->flattenPengeluaranDetail($dataCetak);
+
+        $rekapJenisCetak = [];
+        foreach ($dataCetak as $row) {
+            $jenis = $row->kategori ?: '-';
+            if (!isset($rekapJenisCetak[$jenis])) {
+                $rekapJenisCetak[$jenis] = ['jumlah_transaksi' => 0, 'total' => 0.0];
+            }
+            $rekapJenisCetak[$jenis]['jumlah_transaksi']++;
+            $rekapJenisCetak[$jenis]['total'] += (float) $row->total_bayar;
+        }
+        arsort($rekapJenisCetak);
 
         return view('laporan.pengeluaran-dana', [
             'data' => $data,
+            'dataCetak' => $dataCetak,
+            'dataCetakDetail' => $dataCetakDetail,
+            'rekapJenisCetak' => $rekapJenisCetak,
             'totalPengeluaran' => $totalPengeluaran,
             'periode' => $periode,
             'request' => $request,
         ]);
+    }
+
+    /**
+     * Pecah koleksi Transaksi (jenis Keluar) menjadi baris per-item, sehingga
+     * rincian item, jumlah x harga, dan subtotal per item ikut tampil - dipakai
+     * bersama oleh tampilan cetak PDF dan Export Excel supaya datanya konsisten.
+     */
+    private function flattenPengeluaranDetail($transaksiCollection): array
+    {
+        $transaksiCollection->loadMissing('details');
+
+        $rows = [];
+        $no = 1;
+
+        foreach ($transaksiCollection as $t) {
+            $tanggal = optional($t->tanggal)->format('d-m-Y') ?: '-';
+            $noTransaksi = 'TRX' . optional($t->tanggal)->format('ymd') . str_pad((string) $t->id, 4, '0', STR_PAD_LEFT);
+            $jenis = $t->kategori ?: '-';
+            $penerima = $t->nama_siswa ?: '-';
+            $keterangan = $t->catatan ?: '-';
+
+            if ($t->details->isNotEmpty()) {
+                foreach ($t->details as $d) {
+                    $jumlah = (int) $d->jumlah;
+                    $harga = (float) $d->harga;
+                    $rows[] = [
+                        'no' => $no++,
+                        'no_transaksi' => $noTransaksi,
+                        'tanggal' => $tanggal,
+                        'jenis' => $jenis,
+                        'item' => $d->nama_item ?: '-',
+                        'jumlah_label' => $jumlah > 0 ? ($jumlah . ' x Rp ' . number_format($harga, 0, ',', '.')) : '-',
+                        'keterangan' => $keterangan,
+                        'penerima' => $penerima,
+                        'nominal' => (float) $d->subtotal,
+                    ];
+                }
+            } else {
+                // Data lama / pengeluaran tanpa rincian item: tetap tampil 1 baris
+                // berdasarkan catatan & total transaksi, supaya tidak hilang.
+                $rows[] = [
+                    'no' => $no++,
+                    'no_transaksi' => $noTransaksi,
+                    'tanggal' => $tanggal,
+                    'jenis' => $jenis,
+                    'item' => '-',
+                    'jumlah_label' => '-',
+                    'keterangan' => $keterangan,
+                    'penerima' => $penerima,
+                    'nominal' => (float) $t->total_bayar,
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     public function exportPengeluaranDana(Request $request)
@@ -598,14 +731,34 @@ class BendaharaController extends Controller
         $periode = $this->resolvePeriode($request);
 
         $data = Transaksi::query()
+            ->with('details')
             ->where('jenis', 'Keluar')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->orderBy('tanggal', 'desc')
+            ->orderBy('id', 'desc')
             ->get();
+
+        $dataDetail = $this->flattenPengeluaranDetail($data);
+
+        $rekapJenis = [];
+        foreach ($data as $row) {
+            $jenis = $row->kategori ?: '-';
+            if (!isset($rekapJenis[$jenis])) {
+                $rekapJenis[$jenis] = ['jumlah_transaksi' => 0, 'total' => 0.0];
+            }
+            $rekapJenis[$jenis]['jumlah_transaksi']++;
+            $rekapJenis[$jenis]['total'] += (float) $row->total_bayar;
+        }
+        arsort($rekapJenis);
 
         $fileName = 'Laporan_Pengeluaran_Dana_' . now()->format('Y-m-d_His') . '.xlsx';
 
-        return Excel::download(new PengeluaranDanaExport($data, $periode['label']), $fileName);
+        return Excel::download(new PengeluaranDanaExport(
+            $dataDetail,
+            $rekapJenis,
+            (float) $data->sum('total_bayar'),
+            $periode['label']
+        ), $fileName);
     }
 
     // 2C. Laporan Rekapitulasi Keuangan / Kas
@@ -628,6 +781,9 @@ class BendaharaController extends Controller
             'totalPemasukan' => $ringkasanKas['totalPemasukan'],
             'totalPengeluaran' => $ringkasanKas['totalPengeluaran'],
             'saldoAkhirKas' => $ringkasanKas['saldoAkhirKas'],
+            'rincianPemasukan' => $ringkasanKas['rincianPemasukan'],
+            'rincianPengeluaran' => $ringkasanKas['rincianPengeluaran'],
+            'tren' => $ringkasanKas['tren'],
             'chartLabels' => $chartLabels,
             'chartData' => $chartData,
         ]);
@@ -649,8 +805,112 @@ class BendaharaController extends Controller
         $request->validate([
             'tanggal_mulai' => ['nullable', 'date'],
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
+            'group_by' => ['nullable', 'string'],
         ]);
 
+        $groupBy = $request->input('group_by', 'kategori');
+        $itemPembayaranList = ItemPembayaran::query()
+            ->orderBy('nama_item')
+            ->get(['id', 'kode', 'nama_item']);
+
+        if ($groupBy === 'per_item') {
+            $data = $this->buildLaporanYayasanPerItem($request);
+        } elseif (is_numeric($groupBy)) {
+            $itemPembayaran = ItemPembayaran::find((int) $groupBy);
+            $data = $itemPembayaran
+                ? $this->buildLaporanYayasanFilterItem($request, $itemPembayaran)
+                : $this->buildLaporanYayasanPerKategori($request);
+        } else {
+            $data = $this->buildLaporanYayasanPerKategori($request);
+        }
+
+        $data['groupBy'] = $groupBy;
+        $data['request'] = $request;
+        $data['itemPembayaranList'] = $itemPembayaranList;
+
+        return view('laporan.yayasan', $data);
+    }
+
+    private function buildDetailMasuk($masukCollection, string $groupBy = 'kategori')
+    {
+        $masukCollection->loadMissing(['details', 'pembayaranTagihan']);
+
+        return $masukCollection
+            ->groupBy(function ($t) use ($groupBy) {
+                if ($groupBy === 'per_item') {
+                    $namaItem = $t->details->pluck('nama_item')->filter()->unique()->implode(', ');
+                    return $namaItem !== '' ? $namaItem : ($t->kategori ?? '-');
+                }
+                return $t->kategori ?? '-';
+            })
+            ->map(function ($items) {
+                return $items->map(function ($t) {
+                    $namaItem = $t->details->pluck('nama_item')->filter()->unique()->implode(', ');
+                    $metode = $t->pembayaranTagihan->metode_bayar ?? null;
+                    $namaBank = $t->pembayaranTagihan->nama_bank ?? null;
+                    $metodeLabel = $metode ? strtoupper($metode) : '-';
+                    if ($metode === 'transfer' && $namaBank) {
+                        $metodeLabel .= ' (' . strtoupper($namaBank) . ')';
+                    }
+                    return [
+                        'tanggal' => optional($t->tanggal)->format('d-m-Y') ?? '-',
+                        'nama_siswa' => $t->nama_siswa ?? '-',
+                        'kelas' => $t->kelas ?? '-',
+                        'item' => $namaItem !== '' ? $namaItem : ($t->catatan ?: '-'),
+                        'metode' => $metodeLabel,
+                        'nominal' => (float) $t->total_bayar,
+                    ];
+                })->sortBy('tanggal')->values();
+            });
+    }
+
+    private function buildDetailKeluar($keluarCollection)
+    {
+        $keluarCollection->loadMissing(['creator', 'details']);
+
+        return $keluarCollection
+            ->groupBy(fn ($t) => $t->kategori ?? '-')
+            ->map(function ($items) {
+                $rows = collect();
+
+                foreach ($items as $t) {
+                    $tanggal = optional($t->tanggal)->format('d-m-Y') ?? '-';
+                    $dicatatOleh = $t->creator->name ?? '-';
+                    $keterangan = $t->catatan ?: '-';
+
+                    if ($t->details->isNotEmpty()) {
+                        foreach ($t->details as $d) {
+                            $jumlah = (int) $d->jumlah;
+                            $harga = (float) $d->harga;
+                            $rows->push([
+                                'tanggal' => $tanggal,
+                                'item' => $d->nama_item ?: '-',
+                                'jumlah_label' => $jumlah > 0 ? ($jumlah . ' x Rp ' . number_format($harga, 0, ',', '.')) : '-',
+                                'keterangan' => $keterangan,
+                                'dicatat_oleh' => $dicatatOleh,
+                                'nominal' => (float) $d->subtotal,
+                            ]);
+                        }
+                    } else {
+                        // Data lama / pengeluaran tanpa rincian item: tetap tampil 1 baris
+                        // berdasarkan catatan & total transaksi, supaya tidak hilang dari laporan.
+                        $rows->push([
+                            'tanggal' => $tanggal,
+                            'item' => '-',
+                            'jumlah_label' => '-',
+                            'keterangan' => $keterangan,
+                            'dicatat_oleh' => $dicatatOleh,
+                            'nominal' => (float) $t->total_bayar,
+                        ]);
+                    }
+                }
+
+                return $rows->sortBy('tanggal')->values();
+            });
+    }
+
+    private function buildLaporanYayasanPerKategori(Request $request): array
+    {
         $queryMasuk = Transaksi::where('jenis', 'Masuk');
         $queryKeluar = Transaksi::where('jenis', 'Keluar');
 
@@ -662,18 +922,109 @@ class BendaharaController extends Controller
         $masuk = $queryMasuk->get();
         $keluar = $queryKeluar->get();
 
-        $reportMasuk = $masuk->groupBy('kategori')->map(function ($item) {
-            return $item->sum('total_bayar');
-        });
-        $reportKeluar = $keluar->groupBy('kategori')->map(function ($item) {
-            return $item->sum('total_bayar');
-        });
+        return [
+            'reportMasuk' => $masuk->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'reportKeluar' => $keluar->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'detailMasuk' => $this->buildDetailMasuk($masuk, 'kategori'),
+            'detailKeluar' => $this->buildDetailKeluar($keluar),
+            'totalMasuk' => $masuk->sum('total_bayar'),
+            'totalKeluar' => $keluar->sum('total_bayar'),
+            'saldo' => $masuk->sum('total_bayar') - $keluar->sum('total_bayar'),
+        ];
+    }
 
-        $totalMasuk = $masuk->sum('total_bayar');
-        $totalKeluar = $keluar->sum('total_bayar');
-        $saldo = $totalMasuk - $totalKeluar;
+    private function buildLaporanYayasanPerItem(Request $request): array
+    {
+        $queryMasuk = Transaksi::where('jenis', 'Masuk');
+        $queryKeluar = Transaksi::where('jenis', 'Keluar');
 
-        return view('laporan.yayasan', compact('reportMasuk', 'reportKeluar', 'totalMasuk', 'totalKeluar', 'saldo', 'request'));
+        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
+            $queryMasuk->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+            $queryKeluar->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        }
+
+        $masuk = $queryMasuk->get();
+        $keluar = $queryKeluar->get();
+
+        // Kelompokkan pemasukan berdasarkan nama_item dari detail_transaksis
+        $detailMasuk = DetailTransaksi::whereIn('transaksi_id', $masuk->pluck('id'))
+            ->selectRaw('transaksi_id, nama_item, SUM(subtotal) as total')
+            ->groupBy('transaksi_id', 'nama_item')
+            ->get()
+            ->groupBy('nama_item')
+            ->map(fn ($items) => $items->sum('total'));
+
+        return [
+            'reportMasuk' => $detailMasuk,
+            'reportKeluar' => $keluar->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'detailMasuk' => $this->buildDetailMasuk($masuk, 'per_item'),
+            'detailKeluar' => $this->buildDetailKeluar($keluar),
+            'totalMasuk' => $masuk->sum('total_bayar'),
+            'totalKeluar' => $keluar->sum('total_bayar'),
+            'saldo' => $masuk->sum('total_bayar') - $keluar->sum('total_bayar'),
+        ];
+    }
+
+    private function buildLaporanYayasanFilterItem(Request $request, ItemPembayaran $item): array
+    {
+        $tanggalMulai = $request->input('tanggal_mulai');
+        $tanggalSelesai = $request->input('tanggal_selesai');
+        $itemId = $item->id;
+
+        // Ambil ID transaksi dari pembayaran tagihan untuk item ini
+        $transaksiIdsViaTagihan = Transaksi::query()
+            ->select('transaksis.id')
+            ->join('pembayaran_tagihans', 'pembayaran_tagihans.id', '=', 'transaksis.pembayaran_tagihan_id')
+            ->join('tagihans', 'tagihans.id', '=', 'pembayaran_tagihans.tagihan_id')
+            ->where('tagihans.item_pembayaran_id', $itemId)
+            ->where('transaksis.jenis', 'Masuk')
+            ->when($tanggalMulai && $tanggalSelesai, fn ($q) => $q->whereBetween('transaksis.tanggal', [$tanggalMulai, $tanggalSelesai]))
+            ->pluck('id');
+
+        // Ambil ID transaksi dari detail_transaksis untuk item ini
+        $transaksiIdsViaDetail = DetailTransaksi::query()
+            ->where('item_pembayaran_id', $itemId)
+            ->pluck('transaksi_id');
+
+        $allIds = $transaksiIdsViaTagihan
+            ->merge($transaksiIdsViaDetail)
+            ->unique()
+            ->values();
+
+        if ($allIds->isEmpty()) {
+            return [
+                'reportMasuk' => collect(),
+                'reportKeluar' => collect(),
+                'detailMasuk' => collect(),
+                'detailKeluar' => collect(),
+                'totalMasuk' => 0,
+                'totalKeluar' => 0,
+                'saldo' => 0,
+                'filterItem' => $item,
+            ];
+        }
+
+        $queryMasuk = Transaksi::whereIn('id', $allIds)->where('jenis', 'Masuk');
+        $queryKeluar = Transaksi::whereIn('id', $allIds)->where('jenis', 'Keluar');
+
+        if ($tanggalMulai && $tanggalSelesai) {
+            $queryMasuk->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
+            $queryKeluar->whereBetween('tanggal', [$tanggalMulai, $tanggalSelesai]);
+        }
+
+        $masuk = $queryMasuk->get();
+        $keluar = $queryKeluar->get();
+
+        return [
+            'reportMasuk' => $masuk->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'reportKeluar' => $keluar->groupBy('kategori')->map(fn ($item) => $item->sum('total_bayar')),
+            'detailMasuk' => $this->buildDetailMasuk($masuk, 'kategori'),
+            'detailKeluar' => $this->buildDetailKeluar($keluar),
+            'totalMasuk' => $masuk->sum('total_bayar'),
+            'totalKeluar' => $keluar->sum('total_bayar'),
+            'saldo' => $masuk->sum('total_bayar') - $keluar->sum('total_bayar'),
+            'filterItem' => $item,
+        ];
     }
 
     // Export Excel Yayasan
@@ -682,41 +1033,102 @@ class BendaharaController extends Controller
         $request->validate([
             'tanggal_mulai' => ['nullable', 'date'],
             'tanggal_selesai' => ['nullable', 'date', 'after_or_equal:tanggal_mulai'],
+            'group_by' => ['nullable', 'string'],
         ]);
 
-        // 1. Lakukan logika perhitungan yang sama dengan laporanYayasan
-        $queryMasuk = Transaksi::where('jenis', 'Masuk');
-        $queryKeluar = Transaksi::where('jenis', 'Keluar');
+        $groupBy = $request->input('group_by', 'kategori');
 
-        if ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai')) {
-            $queryMasuk->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
-            $queryKeluar->whereBetween('tanggal', [$request->tanggal_mulai, $request->tanggal_selesai]);
+        if ($groupBy === 'per_item') {
+            $data = $this->buildLaporanYayasanPerItem($request);
+            $groupLabel = 'Per Item';
+        } elseif (is_numeric($groupBy)) {
+            $itemPembayaran = ItemPembayaran::find((int) $groupBy);
+            $data = $itemPembayaran
+                ? $this->buildLaporanYayasanFilterItem($request, $itemPembayaran)
+                : $this->buildLaporanYayasanPerKategori($request);
+            $groupLabel = $itemPembayaran?->nama_item ?? 'Per Kategori';
+        } else {
+            $data = $this->buildLaporanYayasanPerKategori($request);
+            $groupLabel = 'Per Kategori';
         }
 
-        $masuk = $queryMasuk->get();
-        $keluar = $queryKeluar->get();
+        $nomorSurat = '001/B/SMA.U.BPPT.DS/' . now()->format('d/m/Y');
+        $filterItem = isset($data['filterItem']) ? $data['filterItem'] : null;
+        $periode = ($request->filled('tanggal_mulai') && $request->filled('tanggal_selesai'))
+            ? date('d-m-Y', strtotime($request->tanggal_mulai)) . ' s/d ' . date('d-m-Y', strtotime($request->tanggal_selesai))
+            : 'Semua Periode';
+        $dicetakOleh = auth()->user()->name ?? '-';
 
-        $reportMasuk = $masuk->groupBy('kategori')->map(function ($item) {
-            return $item->sum('total_bayar');
-        });
-        $reportKeluar = $keluar->groupBy('kategori')->map(function ($item) {
-            return $item->sum('total_bayar');
-        });
-
-        $totalMasuk = $masuk->sum('total_bayar');
-        $totalKeluar = $keluar->sum('total_bayar');
-        $saldo = $totalMasuk - $totalKeluar;
-
-        // 2. Download Excel menggunakan YayasanExport
         $fileName = 'Laporan_Yayasan_' . now()->format('Y-m-d_His') . '.xlsx';
-        return Excel::download(new YayasanExport($reportMasuk, $reportKeluar, $totalMasuk, $totalKeluar, $saldo), $fileName);
+        return Excel::download(new YayasanExport(
+            $data['reportMasuk'],
+            $data['reportKeluar'],
+            $data['totalMasuk'],
+            $data['totalKeluar'],
+            $data['saldo'],
+            $groupLabel,
+            $nomorSurat,
+            $filterItem,
+            $data['detailMasuk'] ?? collect(),
+            $data['detailKeluar'] ?? collect(),
+            $periode,
+            $dicetakOleh
+        ), $fileName);
     }
 
     // 4. Cetak Nota
     public function cetakNota($id)
     {
-        $transaksi = Transaksi::with('details')->findOrFail($id);
+        $transaksi = Transaksi::with(['details.transaksi.pembayaranTagihan', 'pembayaranTagihan', 'siswa'])->findOrFail($id);
+
+        // Untuk transaksi Masuk yang lahir dari pembayaran tagihan: setiap item tagihan
+        // yang dibayar dalam satu kali submit form tersimpan sebagai Transaksi terpisah
+        // (masing-masing 1 item, masing-masing bisa punya metode_bayar sendiri).
+        // Supaya nota yang dicetak dari Dashboard tidak pecah jadi banyak nota,
+        // gabungkan item-item yang dibayar bersamaan (siswa & waktu bayar sama persis)
+        // menjadi satu nota, sama seperti nota Keluar — sambil tetap membawa metode
+        // pembayaran masing-masing item lewat details.transaksi.pembayaranTagihan.
+        if ($transaksi->jenis === 'Masuk' && $transaksi->pembayaran_tagihan_id && $transaksi->siswa_id) {
+            $satuNota = Transaksi::with('details.transaksi.pembayaranTagihan')
+                ->where('jenis', 'Masuk')
+                ->where('siswa_id', $transaksi->siswa_id)
+                ->where('tanggal', $transaksi->tanggal)
+                ->whereNotNull('pembayaran_tagihan_id')
+                ->orderBy('id')
+                ->get();
+
+            if ($satuNota->count() > 1) {
+                $transaksi->setRelation('details', $satuNota->flatMap(function ($t) {
+                    return $t->details->each(fn ($d) => $d->setRelation('transaksi', $t));
+                })->values());
+                $transaksi->total_bayar = $satuNota->sum('total_bayar');
+            }
+        }
+
         return view('laporan.nota', compact('transaksi'));
+    }
+
+    // Cetak beberapa nota sekaligus (satu file, tiap nota di halaman terpisah saat print).
+    // Hanya untuk transaksi yang lahir dari alur Transaksi Pembayaran (punya pembayaran_tagihan_id),
+    // supaya nota yang dicetak selalu punya data siswa/kategori/metode yang lengkap.
+    public function cetakNotaSemua(Request $request)
+    {
+        $ids = collect(explode(',', (string) $request->query('ids', '')))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        $query = Transaksi::with(['details', 'pembayaranTagihan', 'siswa'])
+            ->whereNotNull('pembayaran_tagihan_id');
+
+        if ($ids->isNotEmpty()) {
+            $query->whereIn('id', $ids);
+        }
+
+        $transaksis = $query->orderBy('tanggal')->orderBy('id')->get();
+
+        return view('laporan.nota-semua', compact('transaksis'));
     }
 
     public function destroy($id)
@@ -724,16 +1136,24 @@ class BendaharaController extends Controller
         DB::transaction(function () use ($id) {
             $transaksi = Transaksi::findOrFail($id);
 
-            DeletionHistory::create([
-                'menu' => 'Dashboard',
-                'entity_type' => 'Transaksi',
-                'entity_id' => $transaksi->id,
-                'label' => ($transaksi->kategori ?? 'Transaksi') . ' - ' . ($transaksi->nama_siswa ?? 'Umum'),
-                'deleted_by' => auth()->id(),
-                'deleted_at' => now(),
-            ]);
+            // Baris ini bisa mewakili beberapa item pembayaran tagihan yang digabung
+            // jadi 1 baris di tampilan Dashboard (lihat index()). Hapus seluruh
+            // anggota grupnya sekaligus supaya tidak ada baris "yatim" yang tertinggal.
+            $grup = collect([$transaksi]);
+            if ($transaksi->jenis === 'Masuk' && $transaksi->pembayaran_tagihan_id && $transaksi->siswa_id) {
+                $grup = Transaksi::where('jenis', 'Masuk')
+                    ->where('siswa_id', $transaksi->siswa_id)
+                    ->where('tanggal', $transaksi->tanggal)
+                    ->whereNotNull('pembayaran_tagihan_id')
+                    ->get();
+            }
 
-            $transaksi->delete();
+            // Transaksi yang dihapus cukup tersimpan di "Daftar Backup Transaksi"
+            // (soft delete pada tabel transaksis) dan tidak perlu dicatat lagi ke
+            // "Log Penghapusan Semua Menu" supaya tidak dobel tampil di kedua tabel.
+            foreach ($grup as $item) {
+                $item->delete();
+            }
         });
 
         return back()->with('success', 'Data dipindahkan ke menu Riwayat dan dapat dipulihkan.');
@@ -741,8 +1161,26 @@ class BendaharaController extends Controller
 
     public function riwayat()
     {
-        $transaksis = Transaksi::onlyTrashed()->latest('deleted_at')->paginate(10, ['*'], 'transaksi_page');
-        $deletionHistories = DeletionHistory::with('user')->latest('deleted_at')->paginate(10, ['*'], 'history_page');
+        $groupKeyExpr = "CASE WHEN jenis = 'Masuk' AND pembayaran_tagihan_id IS NOT NULL AND siswa_id IS NOT NULL "
+            . "THEN CONCAT('grp-', siswa_id, '-', tanggal) ELSE CONCAT('id-', id) END";
+
+        $transaksis = Transaksi::onlyTrashed()
+            ->selectRaw(
+                'MIN(id) as id, MIN(jenis) as jenis, MIN(kategori) as kategori, MIN(siswa_id) as siswa_id, '
+                . 'MIN(nama_siswa) as nama_siswa, MIN(kelas) as kelas, MIN(tanggal) as tanggal, '
+                . 'SUM(total_bayar) as total_bayar, MAX(deleted_at) as deleted_at, COUNT(*) as item_count'
+            )
+            ->groupByRaw($groupKeyExpr)
+            ->orderByDesc('deleted_at')
+            ->paginate(10, ['*'], 'transaksi_page');
+
+        // Transaksi sudah punya tampilannya sendiri di "Daftar Backup Transaksi",
+        // jadi disembunyikan dari "Log Penghapusan Semua Menu" (termasuk data lama
+        // yang sempat tercatat sebelum perubahan ini).
+        $deletionHistories = DeletionHistory::with('user')
+            ->where('entity_type', '!=', 'Transaksi')
+            ->latest('deleted_at')
+            ->paginate(10, ['*'], 'history_page');
 
         return view('keuangan.riwayat', compact('transaksis', 'deletionHistories'));
     }
@@ -751,10 +1189,221 @@ class BendaharaController extends Controller
     {
         DB::transaction(function () use ($id) {
             $transaksi = Transaksi::onlyTrashed()->findOrFail($id);
-            $transaksi->restore();
+
+            // Simetris dengan destroy(): kalau transaksi ini adalah bagian dari
+            // grup item pembayaran tagihan yang dihapus bersamaan, pulihkan
+            // seluruh anggota grupnya sekaligus supaya tidak ada yang tertinggal
+            // di keranjang sampah.
+            $grup = collect([$transaksi]);
+            if ($transaksi->jenis === 'Masuk' && $transaksi->pembayaran_tagihan_id && $transaksi->siswa_id) {
+                $grup = Transaksi::onlyTrashed()
+                    ->where('jenis', 'Masuk')
+                    ->where('siswa_id', $transaksi->siswa_id)
+                    ->where('tanggal', $transaksi->tanggal)
+                    ->whereNotNull('pembayaran_tagihan_id')
+                    ->get();
+            }
+
+            foreach ($grup as $item) {
+                $item->restore();
+            }
+
+            // Bersihkan juga baris log terkait di "Log Penghapusan Semua Menu"
+            // supaya tidak ada catatan yang masih menyiratkan data ini terhapus.
+            DeletionHistory::where('entity_type', 'Transaksi')
+                ->whereIn('entity_id', $grup->pluck('id'))
+                ->delete();
         });
 
         return back()->with('success', 'Data transaksi berhasil dipulihkan.');
+    }
+
+    // Pulihkan data dari baris "Log Penghapusan Semua Menu" (bisa dari menu
+    // manapun: Data Siswa, Tagihan, Item Pembayaran, atau Transaksi), berdasarkan
+    // entity_type & entity_id yang tersimpan di DeletionHistory saat data dihapus.
+    public function restoreDeletionHistory($historyId)
+    {
+        $history = DeletionHistory::findOrFail($historyId);
+
+        $modelMap = [
+            'Siswa' => \App\Models\Siswa::class,
+            'Tagihan' => \App\Models\Tagihan::class,
+            'ItemPembayaran' => \App\Models\ItemPembayaran::class,
+            'Transaksi' => \App\Models\Transaksi::class,
+        ];
+
+        $modelClass = $modelMap[$history->entity_type] ?? null;
+
+        if (!$modelClass || !$history->entity_id) {
+            return back()->with('error', 'Tipe data ini tidak dapat dipulihkan otomatis.');
+        }
+
+        $record = $modelClass::onlyTrashed()->find($history->entity_id);
+
+        if (!$record) {
+            // Data sumbernya sudah tidak ada lagi di keranjang sampah (mis. sudah
+            // dipulihkan lewat baris grup lain, atau sudah dihapus permanen).
+            // Baris log ini jadi basi dan tidak akan pernah bisa dipulihkan lagi,
+            // jadi langsung bersihkan saja supaya tidak nyangkut selamanya.
+            $history->delete();
+
+            return back()->with('success', 'Data sudah dipulihkan sebelumnya, log penghapusan dibersihkan.');
+        }
+
+        DB::transaction(function () use ($record, $history) {
+            // Samakan dengan restore() Transaksi: kalau ini bagian dari grup
+            // pembayaran tagihan yang dihapus bersamaan, pulihkan sekelompoknya.
+            if (
+                $history->entity_type === 'Transaksi'
+                && $record->jenis === 'Masuk'
+                && $record->pembayaran_tagihan_id
+                && $record->siswa_id
+            ) {
+                $grup = \App\Models\Transaksi::onlyTrashed()
+                    ->where('jenis', 'Masuk')
+                    ->where('siswa_id', $record->siswa_id)
+                    ->where('tanggal', $record->tanggal)
+                    ->whereNotNull('pembayaran_tagihan_id')
+                    ->get();
+
+                $grup->each->restore();
+
+                // Setiap item dalam grup dicatat sebagai baris log terpisah saat
+                // dihapus — hapus semuanya sekaligus supaya tidak ada log yang
+                // tertinggal seolah-olah datanya masih terhapus.
+                DeletionHistory::where('entity_type', 'Transaksi')
+                    ->whereIn('entity_id', $grup->pluck('id'))
+                    ->delete();
+
+                return;
+            }
+
+            $record->restore();
+            $history->delete();
+        });
+
+        return back()->with('success', 'Data berhasil dipulihkan.');
+    }
+
+    // Pulihkan SEMUA baris "Daftar Backup Transaksi" sekaligus (semua halaman),
+    // supaya admin tidak perlu memulihkan satu per satu atau berpindah halaman.
+    public function restoreAll()
+    {
+        $restored = 0;
+
+        DB::transaction(function () use (&$restored) {
+            $trashedIds = Transaksi::onlyTrashed()->pluck('id');
+
+            foreach ($trashedIds as $id) {
+                $transaksi = Transaksi::onlyTrashed()->find($id);
+
+                // Mungkin sudah ikut terpulihkan di iterasi sebelumnya sebagai
+                // bagian dari grup pembayaran tagihan yang sama.
+                if (!$transaksi) {
+                    continue;
+                }
+
+                $grup = collect([$transaksi]);
+                if ($transaksi->jenis === 'Masuk' && $transaksi->pembayaran_tagihan_id && $transaksi->siswa_id) {
+                    $grup = Transaksi::onlyTrashed()
+                        ->where('jenis', 'Masuk')
+                        ->where('siswa_id', $transaksi->siswa_id)
+                        ->where('tanggal', $transaksi->tanggal)
+                        ->whereNotNull('pembayaran_tagihan_id')
+                        ->get();
+                }
+
+                foreach ($grup as $item) {
+                    $item->restore();
+                }
+
+                DeletionHistory::where('entity_type', 'Transaksi')
+                    ->whereIn('entity_id', $grup->pluck('id'))
+                    ->delete();
+
+                $restored++;
+            }
+        });
+
+        if ($restored === 0) {
+            return back()->with('error', 'Tidak ada data yang dipulihkan. Data mungkin sudah dipulihkan sebelumnya.');
+        }
+
+        return back()->with('success', $restored . ' data transaksi berhasil dipulihkan semua.');
+    }
+
+    // Pulihkan SELURUH baris "Log Penghapusan Semua Menu" sekaligus, tanpa perlu
+    // mencentang satu per satu atau berpindah halaman.
+    public function restoreDeletionHistoryAll()
+    {
+        $modelMap = [
+            'Siswa' => \App\Models\Siswa::class,
+            'Tagihan' => \App\Models\Tagihan::class,
+            'ItemPembayaran' => \App\Models\ItemPembayaran::class,
+            'Transaksi' => \App\Models\Transaksi::class,
+        ];
+
+        $restored = 0;
+
+        DB::transaction(function () use ($modelMap, &$restored) {
+            // Ambil semua log yang bertipe data valid (bisa dipulihkan otomatis).
+            $histories = DeletionHistory::whereIn('entity_type', array_keys($modelMap))->get();
+
+            foreach ($histories as $history) {
+                // Baris ini mungkin sudah terhapus di iterasi sebelumnya (mis. ikut
+                // terhapus sebagai bagian dari grup Transaksi), jadi cek ulang.
+                if (!DeletionHistory::whereKey($history->id)->exists()) {
+                    continue;
+                }
+
+                $modelClass = $modelMap[$history->entity_type] ?? null;
+
+                if (!$modelClass || !$history->entity_id) {
+                    continue;
+                }
+
+                $record = $modelClass::onlyTrashed()->find($history->entity_id);
+
+                if (!$record) {
+                    // Data sumbernya sudah tidak ada lagi di keranjang sampah,
+                    // log ini basi dan dibersihkan otomatis.
+                    $history->delete();
+                    $restored++;
+                    continue;
+                }
+
+                if (
+                    $history->entity_type === 'Transaksi'
+                    && $record->jenis === 'Masuk'
+                    && $record->pembayaran_tagihan_id
+                    && $record->siswa_id
+                ) {
+                    $grup = \App\Models\Transaksi::onlyTrashed()
+                        ->where('jenis', 'Masuk')
+                        ->where('siswa_id', $record->siswa_id)
+                        ->where('tanggal', $record->tanggal)
+                        ->whereNotNull('pembayaran_tagihan_id')
+                        ->get();
+
+                    $grup->each->restore();
+
+                    DeletionHistory::where('entity_type', 'Transaksi')
+                        ->whereIn('entity_id', $grup->pluck('id'))
+                        ->delete();
+                } else {
+                    $record->restore();
+                    $history->delete();
+                }
+
+                $restored++;
+            }
+        });
+
+        if ($restored === 0) {
+            return back()->with('error', 'Tidak ada data yang dapat dipulihkan.');
+        }
+
+        return back()->with('success', $restored . ' data berhasil dipulihkan semua.');
     }
 
     public function purgeRiwayat(Request $request)
@@ -842,32 +1491,126 @@ class BendaharaController extends Controller
     {
         $totalPemasukan = Transaksi::query()
             ->where('jenis', 'Masuk')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->sum('total_bayar');
 
         $totalPengeluaran = Transaksi::query()
             ->where('jenis', 'Keluar')
-            ->whereBetween('tanggal', [$periode['start']->toDateString(), $periode['end']->toDateString()])
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
             ->sum('total_bayar');
 
         $saldoAwalMasuk = Transaksi::query()
             ->where('jenis', 'Masuk')
-            ->whereDate('tanggal', '<', $periode['start']->toDateString())
+            ->whereDate('tanggal', '<', $periode['start'])
             ->sum('total_bayar');
 
         $saldoAwalKeluar = Transaksi::query()
             ->where('jenis', 'Keluar')
-            ->whereDate('tanggal', '<', $periode['start']->toDateString())
+            ->whereDate('tanggal', '<', $periode['start'])
             ->sum('total_bayar');
 
         $saldoAwalKas = $saldoAwalMasuk - $saldoAwalKeluar;
         $saldoAkhirKas = $saldoAwalKas + $totalPemasukan - $totalPengeluaran;
+
+        // ===== Data transaksi penuh (untuk rincian per transaksi di export) =====
+        $masuk = Transaksi::where('jenis', 'Masuk')
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
+            ->get();
+        $keluar = Transaksi::where('jenis', 'Keluar')
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
+            ->get();
+
+        // ===== Rincian per kategori (agar laporan lebih mudah dipahami & detail) =====
+        $rincianPemasukan = Transaksi::query()
+            ->where('jenis', 'Masuk')
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
+            ->selectRaw('kategori, COUNT(*) as jumlah_transaksi, SUM(total_bayar) as total')
+            ->groupBy('kategori')
+            ->orderByDesc('total')
+            ->get()
+            ->map(function ($row) use ($totalPemasukan) {
+                return [
+                    'kategori' => $row->kategori ?: '-',
+                    'jumlah_transaksi' => (int) $row->jumlah_transaksi,
+                    'total' => (float) $row->total,
+                    'persentase' => $totalPemasukan > 0 ? ((float) $row->total / (float) $totalPemasukan) * 100 : 0,
+                ];
+            })
+            ->values()
+            ->all();
+
+        $rincianPengeluaran = Transaksi::query()
+            ->where('jenis', 'Keluar')
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
+            ->selectRaw('kategori, COUNT(*) as jumlah_transaksi, SUM(total_bayar) as total')
+            ->groupBy('kategori')
+            ->orderByDesc('total')
+            ->get()
+            ->map(function ($row) use ($totalPengeluaran) {
+                return [
+                    'kategori' => $row->kategori ?: '-',
+                    'jumlah_transaksi' => (int) $row->jumlah_transaksi,
+                    'total' => (float) $row->total,
+                    'persentase' => $totalPengeluaran > 0 ? ((float) $row->total / (float) $totalPengeluaran) * 100 : 0,
+                ];
+            })
+            ->values()
+            ->all();
+
+        // ===== Tren arus kas harian dalam periode (untuk grafik garis) =====
+        $trenHarian = Transaksi::query()
+            ->whereBetween('tanggal', [$periode['start'], $periode['end']])
+            ->selectRaw("tanggal, jenis, SUM(total_bayar) as total")
+            ->groupBy('tanggal', 'jenis')
+            ->orderBy('tanggal')
+            ->get();
+
+        $tanggalMap = [];
+        foreach ($trenHarian as $row) {
+            $tgl = $row->tanggal instanceof \Illuminate\Support\Carbon
+                ? $row->tanggal->format('Y-m-d')
+                : Carbon::parse($row->tanggal)->format('Y-m-d');
+
+            if (!isset($tanggalMap[$tgl])) {
+                $tanggalMap[$tgl] = ['masuk' => 0.0, 'keluar' => 0.0];
+            }
+
+            if ($row->jenis === 'Masuk') {
+                $tanggalMap[$tgl]['masuk'] += (float) $row->total;
+            } else {
+                $tanggalMap[$tgl]['keluar'] += (float) $row->total;
+            }
+        }
+        ksort($tanggalMap);
+
+        $saldoBerjalan = $saldoAwalKas;
+        $trenLabel = [];
+        $trenMasuk = [];
+        $trenKeluar = [];
+        $trenSaldo = [];
+        foreach ($tanggalMap as $tgl => $nilai) {
+            $saldoBerjalan += $nilai['masuk'] - $nilai['keluar'];
+            $trenLabel[] = Carbon::parse($tgl)->translatedFormat('d M');
+            $trenMasuk[] = $nilai['masuk'];
+            $trenKeluar[] = $nilai['keluar'];
+            $trenSaldo[] = $saldoBerjalan;
+        }
 
         return [
             'saldoAwalKas' => $saldoAwalKas,
             'totalPemasukan' => $totalPemasukan,
             'totalPengeluaran' => $totalPengeluaran,
             'saldoAkhirKas' => $saldoAkhirKas,
+            'rincianPemasukan' => $rincianPemasukan,
+            'rincianPengeluaran' => $rincianPengeluaran,
+            'detailPemasukan' => $this->buildDetailMasuk($masuk, 'kategori'),
+            'detailPengeluaran' => $this->buildDetailKeluar($keluar),
+            'tren' => [
+                'label' => $trenLabel,
+                'masuk' => $trenMasuk,
+                'keluar' => $trenKeluar,
+                'saldo' => $trenSaldo,
+            ],
         ];
     }
 

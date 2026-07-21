@@ -120,13 +120,20 @@
                                 @csrf
                                 <input type="hidden" name="siswa_id" value="{{ $siswa->id }}">
                                 <div class="col-md-auto"><label class="form-label small">Tanggal</label><input type="date" name="tanggal_bayar" class="form-control form-control-sm" value="{{ date('Y-m-d') }}" required></div>
-                                <div class="col-md-auto"><label class="form-label small">Metode</label><input type="text" name="metode_bayar" class="form-control form-control-sm" placeholder="Metode"></div>
-                                <div class="col-md-auto d-grid"><label class="form-label small">&nbsp;</label><button type="button" class="btn btn-sm btn-success btn-delete-confirm"
+                                <div class="col-md-auto"><label class="form-label small">Metode</label>
+                                    <select name="metode_bayar" class="form-select form-select-sm metode-select" required>
+                                        <option value="">Pilih</option>
+                                        <option value="cash">Cash</option>
+                                        <option value="transfer">Transfer</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-auto norek-field d-none">
+                                    <label class="form-label small">Nama Bank</label>
+                                    <input type="text" name="nama_bank" class="form-control form-control-sm" placeholder="Nama Bank">
+                                </div>
+                                <div class="col-md-auto d-grid"><label class="form-label small">&nbsp;</label><button type="button" class="btn btn-sm btn-success btn-bayar-tanggungan"
                                     data-form-id="bayar-semua-{{ $siswa->id }}"
-                                    data-confirm-title="Konfirmasi Pembayaran"
-                                    data-confirm-message="Bayar semua tanggungan {{ $siswa->nama }}?"
-                                    data-confirm-action-text="Ya, Bayar"
-                                    data-confirm-action-class="btn btn-success">Bayar Sekaligus</button></div>
+                                    data-siswa-nama="{{ $siswa->nama }}">Bayar Sekaligus</button></div>
                             </form>
                         @endif
                     </div>
@@ -135,4 +142,99 @@
         </div>
     </div>
 @endforeach
+<script>
+    function toggleNorekFields() {
+        document.querySelectorAll('.metode-select').forEach(function(select) {
+            var norekFields = select.closest('form')?.querySelectorAll('.norek-field');
+            if (!norekFields) {
+                return;
+            }
+            norekFields.forEach(function(norekField) {
+                if (select.value === 'transfer') {
+                    norekField.classList.remove('d-none');
+                } else {
+                    norekField.classList.add('d-none');
+                    norekField.querySelectorAll('input').forEach(function(input) {
+                        input.value = '';
+                    });
+                }
+            });
+        });
+    }
+
+    document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('metode-select')) {
+            toggleNorekFields();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', toggleNorekFields);
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-bayar-tanggungan');
+        if (!btn) return;
+
+        var formId = btn.getAttribute('data-form-id');
+        var siswaNama = btn.getAttribute('data-siswa-nama');
+        var form = document.getElementById(formId);
+        if (!form) return;
+
+        var metodeSelect = form.querySelector('select[name="metode_bayar"]');
+        if (metodeSelect && !metodeSelect.value.trim()) {
+            if (typeof window.openInfoAlertModal === 'function') {
+                window.openInfoAlertModal('Metode pembayaran belum dipilih.', 'Peringatan');
+            } else {
+                alert('Metode pembayaran belum dipilih.');
+            }
+            metodeSelect.focus();
+            return;
+        }
+
+        var modalBody = btn.closest('.modal-body');
+        var itemTable = modalBody?.querySelector('.table');
+
+        var items = [];
+        if (itemTable) {
+            itemTable.querySelectorAll('tbody tr').forEach(function (tr) {
+                var nama = tr.querySelector('td:nth-child(1)')?.textContent?.trim();
+                var periode = tr.querySelector('td:nth-child(3)')?.textContent?.trim();
+                var sisaText = tr.querySelector('td:nth-child(4)')?.textContent?.replace(/[^\d]/g, '') || '0';
+                var nominal = Number(sisaText) || 0;
+                if (!nama || nominal <= 0) return;
+                var label = periode && periode !== '-' ? nama + ' (' + periode + ')' : nama;
+                items.push({
+                    nama: label,
+                    nominal: nominal,
+                    metode: metodeSelect ? metodeSelect.options[metodeSelect.selectedIndex]?.text || metodeSelect.value : '-',
+                });
+            });
+        }
+
+        var sourceModalElement = form.closest('.modal');
+        var metodeValue = metodeSelect ? metodeSelect.value : '';
+
+        var tutupSumberLaluTampilkanKonfirmasi = function () {
+            if (sourceModalElement) {
+                bootstrap.Modal.getOrCreateInstance(sourceModalElement).hide();
+            }
+            setTimeout(function () {
+                window.openPaymentConfirmModal({
+                    message: 'Bayar semua tanggungan ' + siswaNama + '?',
+                    items: items,
+                    showPrintButton: false,
+                    sourceModal: sourceModalElement,
+                    onNoPrint: function () {
+                        window.openConfirmActionModal(
+                            'Yakin akan membayar ' + items.length + ' item ini?',
+                            'Konfirmasi Akhir',
+                            function () { form.submit(); }
+                        );
+                    },
+                    onPrint: null,
+                });
+            }, 300);
+        };
+        tutupSumberLaluTampilkanKonfirmasi();
+    });
+</script>
 @endsection

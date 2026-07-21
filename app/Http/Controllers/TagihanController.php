@@ -8,6 +8,7 @@ use App\Models\Siswa;
 use App\Models\Tagihan;
 use App\Models\TagihanPotongan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -15,7 +16,7 @@ class TagihanController extends Controller
 {
     public function create()
     {
-        $siswas = Siswa::where('status', 'aktif')
+        $siswas = Siswa::where('status', '!=', 'tidak_aktif')
             ->orderBy('nama')
             ->get(['id', 'nis', 'nama', 'kategori', 'status', 'kelas']);
 
@@ -61,7 +62,7 @@ class TagihanController extends Controller
             ->paginate($perPage)
             ->appends($request->query());
 
-        $siswas = Siswa::where('status', 'aktif')->orderBy('nama')->get(['id', 'nis', 'nama', 'kategori', 'status']);
+        $siswas = Siswa::where('status', '!=', 'tidak_aktif')->orderBy('nama')->get(['id', 'nis', 'nama', 'kategori', 'status']);
         $items = ItemPembayaran::where('aktif', true)->orderBy('id')->get();
         $siswaSearch = $siswas->map(function ($siswa) {
             return [
@@ -81,11 +82,10 @@ class TagihanController extends Controller
             '10' => 'X',
             '11' => 'XI',
             '12' => 'XII',
-            '13' => 'XIII',
             default => strtoupper(trim($jenjang)),
         };
 
-        if (!in_array($jenjang, ['X', 'XI', 'XII', 'XIII'], true)) {
+        if (!in_array($jenjang, ['X', 'XI', 'XII'], true)) {
             return;
         }
 
@@ -99,9 +99,6 @@ class TagihanController extends Controller
             if ($jenjang === 'XII') {
                 $kelasQuery->where('kelas', 'like', '12%')->orWhere('kelas', '=', 'XII')->orWhere('kelas', 'like', 'XII %');
             }
-            if ($jenjang === 'XIII') {
-                $kelasQuery->where('kelas', 'like', '13%')->orWhere('kelas', '=', 'XIII')->orWhere('kelas', 'like', 'XIII %');
-            }
         });
     }
 
@@ -114,7 +111,7 @@ class TagihanController extends Controller
             'periode_bulan' => 'required|array|min:1',
             'periode_bulan.*' => 'integer|min:1|max:12',
             'periode_tahun' => 'nullable|integer|min:2000|max:2100',
-            'nominal_awal' => 'required|numeric|min:0',
+            'nominal_awal' => ['nullable', 'numeric', 'min:0'],
             'catatan' => 'nullable|string',
         ]);
 
@@ -128,13 +125,22 @@ class TagihanController extends Controller
             return back()->with('error', 'Data siswa tidak valid: NIS atau nama siswa tidak tersedia.')->withInput();
         }
 
-        if ($siswa->status === 'lulus') {
-            return back()->with('error', 'Siswa ' . $siswa->nama . ' sudah lulus, tagihan baru tidak dapat dibuat.')->withInput();
+        if ($siswa->status === 'tidak_aktif') {
+            return back()->with('error', 'Siswa ' . $siswa->nama . ' berstatus tidak aktif, tagihan baru tidak dapat dibuat.')->withInput();
+        }
+
+        if ($siswa->kategori === 'alumni') {
+            $adaItemBukanAlumni = $items->contains(function (ItemPembayaran $item) {
+                return !in_array($item->berlaku_untuk, ['alumni', 'semua'], true);
+            });
+
+            if ($adaItemBukanAlumni) {
+                return back()->with('error', 'Siswa ' . $siswa->nama . ' berkategori Alumni, tagihan baru hanya dapat dibuat untuk item kategori Alumni.')->withInput();
+            }
         }
 
         $itemTidakSesuai = $items->filter(function (ItemPembayaran $item) use ($siswa) {
-            return ($item->berlaku_untuk === 'mondok' && $siswa->kategori !== 'mondok')
-                || ($item->berlaku_untuk === 'non_mondok' && $siswa->kategori !== 'non_mondok');
+            return $item->berlaku_untuk !== 'semua' && $item->berlaku_untuk !== $siswa->kategori;
         });
 
         if ($itemTidakSesuai->isNotEmpty()) {
@@ -152,8 +158,6 @@ class TagihanController extends Controller
             ->unique()
             ->values();
 
-        $nominalAwal = (float) $validated['nominal_awal'];
-
         $created = 0;
         $skipped = 0;
 
@@ -163,7 +167,7 @@ class TagihanController extends Controller
                 continue;
             }
 
-            $nominalDefaultItem = (float) ($item->nominal ?? 0);
+            $nominalDefaultItem = round(max(0, (float) ($item->nominal ?? 0)), 2);
 
             foreach ($bulanList as $bulan) {
                 $exists = Tagihan::query()
@@ -183,7 +187,7 @@ class TagihanController extends Controller
                     'item_pembayaran_id' => $item->id,
                     'periode_bulan' => $bulan,
                     'periode_tahun' => $validated['periode_tahun'] ?? null,
-                    'nominal_awal' => $nominalAwal > 0 ? $nominalAwal : $nominalDefaultItem,
+                    'nominal_awal' => $nominalDefaultItem,
                     'status' => 'belum_lunas',
                     'catatan' => $validated['catatan'] ?? null,
                 ];
@@ -220,7 +224,7 @@ class TagihanController extends Controller
         $tagihan->update([
             'periode_bulan' => $validated['periode_bulan'] ?? null,
             'periode_tahun' => $validated['periode_tahun'] ?? null,
-            'nominal_awal' => $validated['nominal_awal'],
+            'nominal_awal' => round((float) $validated['nominal_awal'], 2),
             'catatan' => $validated['catatan'] ?? null,
         ]);
 
@@ -251,7 +255,8 @@ class TagihanController extends Controller
             return back()->with('error', 'Tagihan sudah lunas, potongan tidak dapat ditambahkan.');
         }
 
-        if ((float) $validated['nominal_potongan'] > $sisaSaatIni) {
+        $nominalPotongan = round((float) $validated['nominal_potongan'], 2);
+        if ($nominalPotongan > $sisaSaatIni) {
             return back()->with('error', 'Nominal potongan melebihi sisa tagihan.');
         }
 
@@ -259,7 +264,7 @@ class TagihanController extends Controller
             'tagihan_id' => $tagihan->id,
             'tanggal_potongan' => $validated['tanggal_potongan'],
             'keterangan' => $validated['keterangan'],
-            'nominal_potongan' => $validated['nominal_potongan'],
+            'nominal_potongan' => $nominalPotongan,
         ]);
 
         $tagihan->fresh()->sinkronkanStatus();
@@ -288,15 +293,16 @@ class TagihanController extends Controller
 
         $validated = $validator->validated();
 
+        $nominalPotongan = round((float) $validated['nominal_potongan'], 2);
         $batasPotongan = $tagihan->sisaTagihan() + (float) $potongan->nominal_potongan;
-        if ((float) $validated['nominal_potongan'] > $batasPotongan) {
+        if ($nominalPotongan > $batasPotongan) {
             return back()->with('error', 'Nominal potongan melebihi sisa tagihan yang tersedia.');
         }
 
         $potongan->update([
             'tanggal_potongan' => $validated['tanggal_potongan'],
             'keterangan' => $validated['keterangan'],
-            'nominal_potongan' => $validated['nominal_potongan'],
+            'nominal_potongan' => $nominalPotongan,
         ]);
 
         $tagihan->fresh()->sinkronkanStatus();
@@ -318,8 +324,8 @@ class TagihanController extends Controller
 
     public function destroy(Tagihan $tagihan)
     {
-        $siswaNama = $tagihan->siswa->nama ?? 'Siswa';
-        $itemNama = $tagihan->itemPembayaran->nama_item ?? 'Item';
+        $siswaNama = optional($tagihan->siswa)->nama ?? 'Siswa';
+        $itemNama = optional($tagihan->itemPembayaran)->nama_item ?? 'Item';
 
         DeletionHistory::create([
             'menu' => 'Tagihan',
@@ -333,5 +339,38 @@ class TagihanController extends Controller
         $tagihan->delete();
 
         return back()->with('success', 'Tagihan ' . $itemNama . ' untuk ' . $siswaNama . ' berhasil dihapus.');
+    }
+
+    public function destroyAllBySiswa(Siswa $siswa)
+    {
+        $tagihans = Tagihan::with('itemPembayaran')
+            ->where('siswa_id', $siswa->id)
+            ->whereIn('status', ['belum_lunas', 'sebagian'])
+            ->get();
+
+        if ($tagihans->isEmpty()) {
+            return back()->with('error', 'Tidak ada tagihan belum lunas untuk ' . $siswa->nama . '.');
+        }
+
+        $total = $tagihans->count();
+
+        DB::transaction(function () use ($tagihans, $siswa) {
+            foreach ($tagihans as $tagihan) {
+                $itemNama = optional($tagihan->itemPembayaran)->nama_item ?? 'Item';
+
+                DeletionHistory::create([
+                    'menu' => 'Tagihan',
+                    'entity_type' => 'Tagihan',
+                    'entity_id' => $tagihan->id,
+                    'label' => $itemNama . ' - ' . $siswa->nama,
+                    'deleted_by' => auth()->id(),
+                    'deleted_at' => now(),
+                ]);
+
+                $tagihan->delete();
+            }
+        });
+
+        return back()->with('success', $total . ' tagihan milik ' . $siswa->nama . ' berhasil dihapus semua.');
     }
 }

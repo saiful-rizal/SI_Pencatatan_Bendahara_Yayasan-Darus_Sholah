@@ -17,6 +17,17 @@
                 <i class="fas fa-file-excel me-1"></i> Export Excel
             </a>
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalTambahSiswa">+ Tambah Siswa</button>
+            <form action="{{ route('siswa.destroy-all') }}" method="POST" class="d-inline" id="delete-all-siswa">
+                @csrf
+                @method('DELETE')
+                <button type="button" class="btn btn-outline-danger btn-delete-confirm"
+                    data-form-id="delete-all-siswa"
+                    data-confirm-title="Konfirmasi Hapus Semua Data Siswa"
+                    data-confirm-message="Anda yakin ingin menghapus SEMUA data siswa ({{ \App\Models\Siswa::count() }} data)? Tindakan ini tidak dapat dibatalkan."
+                    data-confirm-action-text="Ya, Hapus Semua">
+                    <i class="fas fa-trash me-1"></i> Hapus Semua
+                </button>
+            </form>
         </div>
     </div>
 
@@ -55,7 +66,7 @@
         <div class="card-body">
             <div class="row g-2 align-items-end">
                 <div class="col-12">
-                    <form method="GET" action="{{ route('siswa.index') }}" class="row g-2">
+                    <form method="GET" action="{{ route('siswa.index') }}" class="row g-2 js-auto-filter" data-auto-submit>
                         <div class="col-12 col-md-4"><label class="form-label small">Cari NIS / Nama</label><input
                                 name="q" class="form-control" value="{{ $q ?? '' }}"></div>
                         <div class="col-6 col-md-2"><label class="form-label small">Jenjang</label><select name="jenjang"
@@ -124,9 +135,17 @@
                                 <td>{{ $siswa->nama }}</td>
                                 <td>{{ $siswa->kelas }}</td>
                                 <td>
-                                    <span
-                                        class="badge {{ $siswa->kategori === 'mondok' ? 'bg-primary' : 'bg-secondary' }}">
-                                        {{ $siswa->kategori === 'mondok' ? 'Mondok' : 'Non Mondok' }}
+                                    @php
+                                        $kategoriLabel = [
+                                            'mondok' => 'Mondok',
+                                            'non_mondok' => 'Non Mondok',
+                                            'alumni' => 'Alumni',
+                                            'non_alumni' => 'Non Alumni',
+                                        ][$siswa->kategori] ?? ucfirst(str_replace('_', ' ', $siswa->kategori));
+                                        $kategoriBadge = in_array($siswa->kategori, ['mondok', 'alumni']) ? 'bg-primary' : 'bg-secondary';
+                                    @endphp
+                                    <span class="badge {{ $kategoriBadge }}">
+                                        {{ $kategoriLabel }}
                                     </span>
                                 </td>
                                 <td>
@@ -205,7 +224,7 @@
                         @endphp
 
                         <div class="mb-3">
-                            <small class="text-muted d-block">Status Tagihan</small>
+                            <small class="text-muted d-block">Status Pembayaran</small>
                             <span class="badge {{ $statusTagihanClass }}">{{ ucwords($statusTagihan) }}</span>
                         </div>
 
@@ -225,13 +244,17 @@
                                 ];
                             });
 
-                            $riwayatBelumLunas = $riwayatTagihan->filter(fn ($row) => $row['sisa'] > 0)->values();
-                            $riwayatLunas = $riwayatTagihan->filter(fn ($row) => $row['sisa'] <= 0)->values();
+                            $riwayatBelumLunas = $riwayatTagihan->filter(fn ($row) => $row['sisa'] > 0)
+                                ->sortBy(fn ($row) => (int) ($row['tagihan']->periode_bulan ?? 0))
+                                ->values();
+                            $riwayatLunas = $riwayatTagihan->filter(fn ($row) => $row['sisa'] <= 0)
+                                ->sortBy(fn ($row) => (int) ($row['tagihan']->periode_bulan ?? 0))
+                                ->values();
                         @endphp
 
                         <h6 class="fw-semibold mb-2">Riwayat Belum Lunas</h6>
                         <div class="table-responsive mb-3">
-                            <table class="table table-sm align-middle">
+                            <table class="table table-sm align-middle" data-paginate="true" data-page-size="5">
                                 <thead>
                                     <tr>
                                         <th>Item</th>
@@ -273,7 +296,7 @@
 
                         <h6 class="fw-semibold mb-2">Riwayat Lunas</h6>
                         <div class="table-responsive">
-                            <table class="table table-sm align-middle mb-0">
+                            <table class="table table-sm align-middle mb-0" data-paginate="true" data-page-size="5">
                                 <thead>
                                     <tr>
                                         <th>Item</th>
@@ -314,8 +337,8 @@
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <a href="{{ route('siswa.export', ['q' => $siswa->nis]) }}" class="btn btn-success">
-                            <i class="fas fa-file-excel me-1"></i> Export Excel
+                        <a href="{{ route('siswa.export-detail', $siswa->id) }}" class="btn btn-success">
+                            <i class="fas fa-file-excel me-1"></i> Export Excel (Detail)
                         </a>
                     </div>
                 </div>
@@ -356,6 +379,8 @@
                                     class="form-select">
                                     <option value="non_mondok" {{ $siswa->kategori === 'non_mondok' ? 'selected' : '' }}>Non Mondok</option>
                                     <option value="mondok" {{ $siswa->kategori === 'mondok' ? 'selected' : '' }}>Mondok</option>
+                                    <option value="alumni" {{ $siswa->kategori === 'alumni' ? 'selected' : '' }}>Alumni</option>
+                                    <option value="non_alumni" {{ $siswa->kategori === 'non_alumni' ? 'selected' : '' }}>Non Alumni</option>
                                 </select></div>
                             <div class="col-md-6"><label class="form-label small">Status</label><select name="status"
                                     class="form-select">
@@ -405,6 +430,8 @@
                                 class="form-select">
                                 <option value="non_mondok">Non Mondok</option>
                                 <option value="mondok">Mondok</option>
+                                <option value="alumni">Alumni</option>
+                                <option value="non_alumni">Non Alumni</option>
                             </select></div>
                         <div class="col-md-6"><label class="form-label small">Status</label><select name="status"
                                 class="form-select">

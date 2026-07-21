@@ -87,7 +87,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4 no-print flex-wrap gap-2">
     <div>
         <h2 class="fw-bold text-dark mb-1">Laporan Keuangan Yayasan</h2>
-        <small class="text-muted">Rekapitulasi Pemasukan dan Pengeluaran Per Kategori</small>
+        <small class="text-muted">Rekapitulasi Pemasukan dan Pengeluaran{{ isset($filterItem) ? ' - ' . $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? ' Per Item' : ' Per Kategori') }}</small>
     </div>
     <div class="d-flex gap-2">
         <!-- Tombol Export Excel BARU -->
@@ -117,7 +117,9 @@
 </div>
 
 @php
-    $dokumenYayasan = 'LYY-' . now()->format('Ymd') . '-' . str_pad((string) ($reportMasuk->count() + $reportKeluar->count()), 3, '0', STR_PAD_LEFT);
+    $groupLabel = isset($filterItem) ? $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? 'Item' : 'Kategori');
+    $nomorSurat = '001/B/SMA.U.BPPT.DS/' . now()->format('d/m/Y');
+    $jenisDokumen = isset($filterItem) ? 'Laporan Keuangan Yayasan Per Item - ' . $filterItem->nama_item : (($groupBy ?? 'kategori') === 'per_item' ? 'Laporan Keuangan Yayasan Per Item' : 'Laporan Keuangan Yayasan Per Kategori');
     $periodeYayasan = ($request->tanggal_mulai && $request->tanggal_selesai)
         ? date('d-m-Y', strtotime($request->tanggal_mulai)) . ' s/d ' . date('d-m-Y', strtotime($request->tanggal_selesai))
         : 'Semua Periode';
@@ -125,28 +127,40 @@
 
 <div class="print-only mb-3" style="font-size:12px;color:#2f4564;line-height:1.7;">
     <table class="official-meta" style="width:100%;border-collapse:collapse;margin-bottom:10px;">
-        <tr><td style="width:90px;">Nomor</td><td style="width:12px;">:</td><td>DS/YYS/{{ now()->format('Y/m') }}/{{ str_pad((string) ($reportMasuk->count() + $reportKeluar->count()), 3, '0', STR_PAD_LEFT) }}</td><td style="text-align:right;">{{ now()->translatedFormat('d F Y') }}</td></tr>
+        <tr><td style="width:90px;">Nomor</td><td style="width:12px;">:</td><td>{{ $nomorSurat }}</td><td style="text-align:right;">{{ now()->translatedFormat('d F Y') }}</td></tr>
         <tr><td>Sifat</td><td>:</td><td colspan="2">Penting</td></tr>
         <tr><td>Lampiran</td><td>:</td><td colspan="2">1 berkas</td></tr>
         <tr><td>Hal</td><td>:</td><td colspan="2">Laporan Keuangan Yayasan</td></tr>
     </table>
     <div style="margin-bottom:8px;">Yth. Ketua SMA UNGGULAN BPPT DARUS SHOLAH<br>di Tempat</div>
     <div style="text-align:justify;margin-bottom:8px;">Bersama ini kami sampaikan laporan keuangan yayasan untuk periode {{ $periodeYayasan }} meliputi rekap pemasukan, pengeluaran, serta posisi saldo akhir.</div>
-    <div><strong style="display:inline-block;min-width:180px;">Jenis Dokumen</strong>: Laporan Keuangan Yayasan</div>
-    <div><strong style="display:inline-block;min-width:180px;">Nomor Dokumen</strong>: {{ $dokumenYayasan }}</div>
+    <div><strong style="display:inline-block;min-width:180px;">Jenis Dokumen</strong>: {{ $jenisDokumen }}</div>
+    <div><strong style="display:inline-block;min-width:180px;">Nomor Dokumen</strong>: {{ $nomorSurat }}</div>
     <div><strong style="display:inline-block;min-width:180px;">Periode Laporan</strong>: {{ $periodeYayasan }}</div>
 </div>
 
 <!-- 2. Filter Tanggal (BARU) -->
 <div class="card bg-light border-0 rounded-4 p-4 mb-4 no-print">
-    <form method="GET" action="{{ route('laporan.yayasan') }}" class="row g-3 align-items-end js-auto-filter">
-        <div class="col-md-5">
+    <form method="GET" action="{{ route('laporan.yayasan') }}" class="row g-3 align-items-end js-auto-filter" data-auto-submit>
+        <div class="col-md-4">
             <label class="form-label small fw-bold text-muted">Dari Tanggal</label>
             <input type="date" name="tanggal_mulai" class="form-control" value="{{ $request->tanggal_mulai }}">
         </div>
-        <div class="col-md-5">
+        <div class="col-md-3">
             <label class="form-label small fw-bold text-muted">Sampai Tanggal</label>
             <input type="date" name="tanggal_selesai" class="form-control" value="{{ $request->tanggal_selesai }}">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-bold text-muted">Kelompokkan Berdasarkan</label>
+            <select name="group_by" class="form-select">
+                <option value="kategori" {{ ($groupBy ?? 'kategori') === 'kategori' ? 'selected' : '' }}>Per Kategori</option>
+                <option value="per_item" {{ ($groupBy ?? '') === 'per_item' ? 'selected' : '' }}>Per Item</option>
+                @foreach($itemPembayaranList as $item)
+                    <option value="{{ $item->id }}" {{ (string) ($groupBy ?? '') === (string) $item->id ? 'selected' : '' }}>
+                        {{ $item->kode }} - {{ $item->nama_item }}
+                    </option>
+                @endforeach
+            </select>
         </div>
         <div class="col-md-2">
             <div class="d-flex gap-2">
@@ -164,13 +178,37 @@
         <div class="modern-card h-100">
             <div class="modern-header bg-success-gradient">
                 <span><i class="fas fa-arrow-down me-2"></i>PEMASUKAN</span>
-                <span class="badge bg-white text-success rounded-pill">{{ $reportMasuk->count() }} Kategori</span>
+                <span class="badge bg-white text-success rounded-pill">{{ $reportMasuk->count() }} {{ $groupLabel }}</span>
             </div>
             <div class="card-body p-3">
-                @forelse($reportMasuk as $kategori => $total)
-                <div class="list-item">
-                    <span class="list-label">{{ $kategori }}</span>
-                    <span class="list-value text-success">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                @forelse($reportMasuk as $key => $total)
+                <div class="list-item flex-column align-items-stretch">
+                    <div class="d-flex justify-content-between align-items-center w-100" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#detailMasuk{{ $loop->index }}">
+                        <span class="list-label"><i class="fas fa-chevron-right me-1 small"></i>{{ $key }}</span>
+                        <span class="list-value text-success">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                    </div>
+                    @if(!empty($detailMasuk[$key]))
+                    <div class="collapse mt-2" id="detailMasuk{{ $loop->index }}">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0" style="font-size:12px;">
+                                <thead>
+                                    <tr class="text-muted"><th>Tanggal</th><th>Nama Siswa</th><th>Kelas</th><th>Item</th><th class="text-end">Nominal</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($detailMasuk[$key] as $row)
+                                    <tr>
+                                        <td>{{ $row['tanggal'] }}</td>
+                                        <td>{{ $row['nama_siswa'] }}</td>
+                                        <td>{{ $row['kelas'] }}</td>
+                                        <td>{{ $row['item'] }}</td>
+                                        <td class="text-end">Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    @endif
                 </div>
                 @empty
                 <div class="text-center text-muted py-3">Tidak ada data pemasukan.</div>
@@ -190,13 +228,35 @@
         <div class="modern-card h-100">
             <div class="modern-header bg-danger-gradient">
                 <span><i class="fas fa-arrow-up me-2"></i>PENGELUARAN</span>
-                <span class="badge bg-white text-danger rounded-pill">{{ $reportKeluar->count() }} Kategori</span>
+                <span class="badge bg-white text-danger rounded-pill">{{ $reportKeluar->count() }} {{ $groupLabel }}</span>
             </div>
             <div class="card-body p-3">
-                @forelse($reportKeluar as $kategori => $total)
-                <div class="list-item">
-                    <span class="list-label">{{ $kategori }}</span>
-                    <span class="list-value text-danger">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                @forelse($reportKeluar as $key => $total)
+                <div class="list-item flex-column align-items-stretch">
+                    <div class="d-flex justify-content-between align-items-center w-100" style="cursor:pointer;" data-bs-toggle="collapse" data-bs-target="#detailKeluar{{ $loop->index }}">
+                        <span class="list-label"><i class="fas fa-chevron-right me-1 small"></i>{{ $key }}</span>
+                        <span class="list-value text-danger">Rp {{ number_format($total, 0, ',', '.') }}</span>
+                    </div>
+                    @if(!empty($detailKeluar[$key]))
+                    <div class="collapse mt-2" id="detailKeluar{{ $loop->index }}">
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0" style="font-size:12px;">
+                                <thead>
+                                    <tr class="text-muted"><th>Tanggal</th><th>Keterangan</th><th class="text-end">Nominal</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($detailKeluar[$key] as $row)
+                                    <tr>
+                                        <td>{{ $row['tanggal'] }}</td>
+                                        <td>{{ $row['keterangan'] }}</td>
+                                        <td class="text-end">Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    @endif
                 </div>
                 @empty
                 <div class="text-center text-muted py-3">Tidak ada data pengeluaran.</div>
@@ -235,56 +295,113 @@
 </div>
 
 <div class="print-only">
-    <table class="table table-bordered table-sm" style="width:100%;border-collapse:collapse;font-size:12px;">
+    <table class="table table-bordered table-sm" style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead>
             <tr>
-                <th style="width:60px;">No</th>
-                <th>Uraian</th>
-                <th style="width:220px;">Nominal</th>
+                <th style="width:28px;">No</th>
+                <th style="width:65px;">Tanggal</th>
+                <th>Uraian / Nama Siswa</th>
+                <th style="width:55px;">Kelas</th>
+                <th>Item / Keterangan</th>
+                <th style="width:90px;">Metode</th>
+                <th style="width:105px;">Nominal</th>
             </tr>
         </thead>
         <tbody>
-            <tr><td colspan="3" style="font-weight:700;">I. Rekap Pemasukan</td></tr>
-            @forelse($reportMasuk as $kategori => $total)
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>{{ $kategori }}</td>
-                    <td>Rp {{ number_format($total, 0, ',', '.') }}</td>
+            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">I. REKAPITULASI PEMASUKAN</td></tr>
+            @php $noMasuk = 1; @endphp
+            @forelse($reportMasuk as $key => $total)
+                <tr style="background:#f3f4f6;">
+                    <td colspan="5" style="font-weight:700;">{{ $key }}</td>
+                    <td style="font-weight:700;">Subtotal</td>
+                    <td style="font-weight:700;">Rp {{ number_format($total, 0, ',', '.') }}</td>
                 </tr>
+                @foreach(($detailMasuk[$key] ?? []) as $row)
+                <tr>
+                    <td>{{ $noMasuk++ }}</td>
+                    <td>{{ $row['tanggal'] }}</td>
+                    <td>{{ $row['nama_siswa'] }}</td>
+                    <td>{{ $row['kelas'] }}</td>
+                    <td>{{ $row['item'] }}</td>
+                    <td>{{ $row['metode'] ?? '-' }}</td>
+                    <td>Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                </tr>
+                @endforeach
             @empty
-                <tr><td colspan="3">Tidak ada data pemasukan.</td></tr>
+                <tr><td colspan="7">Tidak ada data pemasukan.</td></tr>
             @endforelse
             <tr>
+                <td colspan="5" style="font-weight:700;text-align:right;">Total Pemasukan</td>
                 <td></td>
-                <td style="font-weight:700;">Total Pemasukan</td>
                 <td style="font-weight:700;">Rp {{ number_format($totalMasuk, 0, ',', '.') }}</td>
             </tr>
 
-            <tr><td colspan="3" style="font-weight:700;">II. Rekap Pengeluaran</td></tr>
-            @forelse($reportKeluar as $kategori => $total)
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>{{ $kategori }}</td>
-                    <td>Rp {{ number_format($total, 0, ',', '.') }}</td>
+            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">II. REKAPITULASI PENGELUARAN</td></tr>
+            @if($reportKeluar->isNotEmpty())
+            <tr style="background:#f8fafc;font-size:10px;color:#475569;">
+                <th style="text-align:left;">No</th>
+                <th style="text-align:left;">Tanggal</th>
+                <th style="text-align:left;">Item</th>
+                <th style="text-align:left;">Jumlah x Harga</th>
+                <th style="text-align:left;">Keterangan</th>
+                <th style="text-align:left;">Dicatat Oleh</th>
+                <th style="text-align:left;">Nominal</th>
+            </tr>
+            @endif
+            @php $noKeluar = 1; @endphp
+            @forelse($reportKeluar as $key => $total)
+                <tr style="background:#f3f4f6;">
+                    <td colspan="5" style="font-weight:700;">{{ $key }}</td>
+                    <td style="font-weight:700;">Subtotal</td>
+                    <td style="font-weight:700;">Rp {{ number_format($total, 0, ',', '.') }}</td>
                 </tr>
+                @foreach(($detailKeluar[$key] ?? []) as $row)
+                <tr>
+                    <td>{{ $noKeluar++ }}</td>
+                    <td>{{ $row['tanggal'] }}</td>
+                    <td>{{ $row['item'] }}</td>
+                    <td>{{ $row['jumlah_label'] }}</td>
+                    <td>{{ $row['keterangan'] }}</td>
+                    <td>{{ $row['dicatat_oleh'] ?? '-' }}</td>
+                    <td>Rp {{ number_format($row['nominal'], 0, ',', '.') }}</td>
+                </tr>
+                @endforeach
             @empty
-                <tr><td colspan="3">Tidak ada data pengeluaran.</td></tr>
+                <tr><td colspan="7">Tidak ada data pengeluaran.</td></tr>
             @endforelse
             <tr>
+                <td colspan="5" style="font-weight:700;text-align:right;">Total Pengeluaran</td>
                 <td></td>
-                <td style="font-weight:700;">Total Pengeluaran</td>
                 <td style="font-weight:700;">Rp {{ number_format($totalKeluar, 0, ',', '.') }}</td>
             </tr>
 
-            <tr><td colspan="3" style="font-weight:700;">III. Posisi Akhir</td></tr>
+            <tr><td colspan="7" style="font-weight:700;background:#e5e7eb;">III. POSISI AKHIR</td></tr>
             <tr>
-                <td>1</td>
-                <td>Saldo Akhir</td>
+                <td colspan="5" style="font-weight:700;text-align:right;">Laba / Rugi Bersih</td>
+                <td></td>
                 <td style="font-weight:700;">Rp {{ number_format($saldo, 0, ',', '.') }}</td>
             </tr>
+            <tr><td colspan="7" style="border:none;"><br><strong>Jenis Dokumen:</strong> {{ $jenisDokumen }}<br><strong>Nomor Dokumen:</strong> {{ $nomorSurat }}<br><strong>Periode:</strong> {{ $periodeYayasan }}<br><strong>Dicetak Oleh:</strong> {{ auth()->user()->name ?? '-' }}</td></tr>
         </tbody>
     </table>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:36px;font-size:11px;">
+        <tr>
+            <td style="width:60%;"></td>
+            <td style="width:40%;text-align:center;">Jember, {{ now()->translatedFormat('d F Y') }}<br>Dibuat oleh, Bendahara</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td style="height:60px;"></td>
+        </tr>
+        <tr>
+            <td></td>
+            <td style="text-align:center;text-decoration:underline;">( {{ auth()->user()->name ?? '..........................................' }} )</td>
+        </tr>
+    </table>
 </div>
+
+
 
 <script>
     function printLaporanYayasan() {

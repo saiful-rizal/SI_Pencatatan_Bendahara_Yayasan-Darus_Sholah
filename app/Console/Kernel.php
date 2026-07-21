@@ -12,7 +12,12 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('backup:database --format=json --keep=30')
+            ->dailyAt('02:00')
+            ->withoutOverlapping()
+            ->onFailure(function () {
+                logger('Backup database otomatis gagal.');
+            });
     }
 
     /**
